@@ -20,8 +20,8 @@ Ontwikkelen op de bestaande PostgreSQL-instantie, met harde scheiding:
    Databases in PostgreSQL zijn strikt gescheiden; een verbinding met de ene
    kan de andere niet uitlezen of wijzigen.
 2. **Eigen databaserol** `relatiegeschenken`, eigenaar van alleen die twee
-   databases, géén superuser. Hiermee is onbedoelde schade aan de databases van
-   andere projecten technisch uitgesloten, niet alleen per afspraak.
+   databases, géén superuser. Zie de correctie onderaan voor wat dit precies
+   wel en niet afdekt.
 3. **Veiligheidsslot**: destructieve commando's (`prisma migrate reset`) worden
    voorafgegaan door een controle op het voorvoegsel `relatiegeschenken_` uit
    `DB_NAME_PREFIX`. Wijkt de naam af, dan weigert het script.
@@ -66,3 +66,30 @@ Het gedeelde geheugen en de gedeelde back-up van de lokale instantie zijn
 daarmee een ontwikkelongemak, geen eigenschap van het systeem. De keuze voor
 een eigen server in productie staat vast; de concrete invulling (hosting,
 omvang, deploymethode) volgt in een eigen ADR zodra Fase 1 af is.
+
+
+## Correctie 2026-10-08: wat de scheiding precies afdekt
+
+Bij verificatie bleek de oorspronkelijke formulering ("technisch uitgesloten")
+te sterk. PostgreSQL geeft `CONNECT` op elke database standaard aan `PUBLIC`,
+dus ook aan een nieuwe rol. Gemeten rechten van de rol `relatiegeschenken`:
+
+| | eigen databases | andere databases |
+|---|---|---|
+| CONNECT | ja | **ja** (standaard via PUBLIC) |
+| CREATE op database | ja | nee |
+| SELECT op tabellen | ja | **nee** - 0 van 22 tabellen in `promohouse` |
+| INSERT / UPDATE / DELETE | ja | **nee** - 0 van 22 |
+| objecten aanmaken in schema `public` | ja | nee |
+
+Juiste formulering: de rol kan verbinden met de databases van andere projecten
+en daar de systeemcatalogus zien (tabelnamen en structuur), maar kan **geen
+enkele rij lezen of wijzigen en niets aanmaken**. Datatoegang is dus wel
+uitgesloten, verbinden niet.
+
+Verdere dichtzetten is mogelijk met
+`REVOKE CONNECT ON DATABASE <db> FROM PUBLIC`, maar dat wijzigt rechten op de
+databases van andere projecten. Alleen doen na expliciete toestemming, en na
+controle met welke rol die projecten verbinden: de eigenaar van een database
+kan altijd verbinden, een aparte applicatierol die op de PUBLIC-grant leunt
+niet meer.

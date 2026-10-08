@@ -1,0 +1,15 @@
+{
+  "extends": "./packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@rgh/db": ["./packages/db/src/index.ts"],
+      "@rgh/contracts": ["./packages/contracts/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "packages/db/prisma/*.ts"
+  ]
+}

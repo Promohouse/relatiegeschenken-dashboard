@@ -1,7 +1,7 @@
 # ADR-0005 - Geld, prijzen, btw en nummerreeksen
 
 - Datum: 2026-10-08
-- Status: geaccepteerd, twee punten nog te beslissen
+- Status: geaccepteerd
 
 ## Besluit
 
@@ -39,11 +39,20 @@ Het btw-tarief staat per orderregel vast (snapshot). De afrondingsmethode is
 een **instelling**, geen hardgecodeerde keuze, zodat het latere antwoord geen
 migratie vraagt.
 
-## Nog te beslissen
+## Beslist op 2026-10-08
 
-1. **Afronding**: btw per orderregel afronden op twee decimalen, of berekenen
-   over het ordertotaal? Moet aansluiten op hoe SnelStart het boekt, anders
-   ontstaan centverschillen bij de facturatie.
-2. **Formaat nummerreeksen**: voorstel `OFF-2026-00001`, `ORD-2026-00001`,
-   `INK-2026-00001`, klantnummer `10001`. Plus: welke startwaarden, gegeven de
-   bestaande nummers in Teamleader?
+1. **Btw-afronding: per orderregel, afgerond op twee decimalen.** Het regel-btw
+   bedrag is de afgeronde waarde; het order-btw bedrag is de som van de
+   afgeronde regelbedragen. Daarmee telt wat op de factuur staat exact op.
+   De methode blijft als instelling `vat.rounding` opgeslagen, zodat een
+   afwijkende eis van SnelStart later zonder migratie te volgen is.
+
+2. **Nummerreeksen: formaat en startwaarde zijn instelbaar.** `NumberSequence`
+   bewaart per reeks een `format` (met plaatshouders voor jaar en teller), een
+   `prefix` en de huidige `lastValue`. Alle drie zijn te wijzigen via
+   Instellingen, ook nadat er al nummers zijn uitgegeven, zodat bestaande
+   reeksen uit Teamleader voortgezet kunnen worden. Uitgifte gebeurt onder een
+   rij-lock; een uitgegeven nummer wordt nooit hergebruikt.
+
+   Vertrekpunt: `OFF-{jaar}-{teller:5}`, `ORD-{jaar}-{teller:5}`,
+   `INK-{jaar}-{teller:5}`, klantnummer `{teller:5}` vanaf 10001.

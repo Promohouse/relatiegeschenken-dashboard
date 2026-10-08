@@ -66,6 +66,28 @@ Architectuurbesluiten horen in `docs/architecture/` als ADR. Een ADR wordt
 niet herschreven: bij een nieuw inzicht schrijf je een nieuwe die de oude
 vervangt (`Vervangt ADR-000X`).
 
+## Commando's
+
+```bash
+npm run db:migrate     # nieuwe migratie maken en toepassen (met veiligheidsslot)
+npm run db:seed        # basisgegevens + demodata, idempotent
+npm run db:studio      # data bekijken
+npm test               # alle workspaces
+npm run typecheck      # TypeScript over de hele monorepo
+```
+
+## Prisma 7: afwijkend van oudere documentatie
+
+- Versie vastgezet op **7.10.0** voor CLI en client. `prisma@latest` staat op
+  een 8.x release candidate, dus nooit blind upgraden. Zie ADR-0006.
+- Connectie-URL's staan in `packages/db/prisma.config.ts`, **niet** in
+  `schema.prisma`. Het `datasource`-blok bevat alleen `provider`.
+- De client verbindt via `@prisma/adapter-pg`; gebruik
+  `createPrismaClient()` uit `@rgh/db`, niet `new PrismaClient()`.
+- Prisma laadt `.env` niet zelf. Scripts gebruiken `dotenv -e ../../.env --`.
+- Tests draaien tegen `relatiegeschenken_test`;
+  `scripts/prepare-test-db.mjs` brengt die eerst op schema.
+
 ## Openstaande besluiten
 
 Zie de kop "Nog te beslissen" onderaan de betreffende ADR. Op dit moment open:

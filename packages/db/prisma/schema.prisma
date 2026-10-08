@@ -1,0 +1,996 @@
+// ---------------------------------------------------------------------------
+// Relatiegeschenken Hub - kernschema (stap 1a)
+//
+// Conventies:
+// - Tabelnamen snake_case via @@map; kolomnamen blijven camelCase.
+//   Reden: "order" is een SQL-sleutelwoord, en de importpijplijn gebruikt
+//   later ruwe SQL met bulk-COPY waarin leesbare tabelnamen helpen.
+// - Bedragen: NUMERIC. Eenheidsprijzen (14,4), totalen (14,2). Nooit float.
+// - isDemo markeert gezaaide demodata, zodat die veilig op te ruimen is.
+// - Auth-tabellen (sessies, MFA-secrets) komen in stap 3 van de gekozen
+//   bibliotheek en koppelen aan User. Niet hier verzinnen.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connectie-URL's staan vanaf Prisma 7 in prisma.config.ts, niet hier.
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Opsommingen -----------------------------------------------------------
+
+enum AddressType {
+  INVOICE
+  DELIVERY
+}
+
+enum OrderKind {
+  QUOTE
+  ORDER
+}
+
+/// Hoofdstatus van de order. Drukproef-, inkoop- en logistieke status staan
+/// per orderregel, omdat een order meerdere leveranciers en drukproeven heeft.
+enum OrderStatus {
+  DRAFT
+  QUOTE_SENT
+  QUOTE_ACCEPTED
+  QUOTE_REJECTED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum FinanceStatus {
+  NOT_INVOICEABLE
+  READY_TO_INVOICE
+  INVOICED
+  PAID
+}
+
+enum ProofStatus {
+  NOT_REQUIRED
+  REQUESTED
+  RECEIVED
+  SENT_TO_CUSTOMER
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum PurchaseStatus {
+  NOT_ORDERED
+  ORDERED
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+}
+
+enum LogisticsStatus {
+  NONE
+  EXPECTED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  SHIPPED
+  DELIVERED
+}
+
+/// Binnenland, intracommunautair (btw verlegd naar afnemer), export buiten EU,
+/// en verlegging binnen Nederland.
+enum VatRegime {
+  DOMESTIC
+  EU_REVERSE_CHARGE
+  EXPORT
+  DOMESTIC_SHIFTED
+}
+
+enum StatusDimension {
+  MAIN
+  PROOF
+  PURCHASE
+  LOGISTICS
+  FINANCE
+}
+
+enum OrderEventType {
+  REQUEST_RECEIVED
+  QUOTE_CREATED
+  QUOTE_SENT
+  QUOTE_ACCEPTED
+  QUOTE_REJECTED
+  ORDER_CREATED
+  PROOF_REQUESTED
+  PROOF_RECEIVED
+  PROOF_SENT_TO_CUSTOMER
+  PROOF_APPROVED
+  PROOF_CHANGES_REQUESTED
+  ORDERED_AT_SUPPLIER
+  SUPPLIER_CONFIRMED
+  EXPECTED_DELIVERY_KNOWN
+  IN_PRODUCTION
+  SHIPPED
+  DELIVERED
+  PACKING_SLIP_ADDED
+  READY_TO_INVOICE
+  INVOICED
+  COMPLETED
+  NOTE_ADDED
+  DOCUMENT_ADDED
+  TASK_CREATED
+  OWNER_CHANGED
+  STATUS_CHANGED
+}
+
+enum DocumentCategory {
+  QUOTE
+  ORDER_CONFIRMATION
+  PROOF
+  SUPPLIER_CONFIRMATION
+  PURCHASE_ORDER
+  PURCHASE_INVOICE
+  PACKING_SLIP
+  SALES_INVOICE
+  OTHER
+}
+
+enum DocumentVisibility {
+  INTERNAL
+  CUSTOMER
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  EXPORT
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+}
+
+/// Herkomst van een veldwaarde. Zie ADR-0004: een handmatig gezette waarde
+/// wordt door geen enkele leveranciersimport overschreven.
+enum FieldSource {
+  SUPPLIER
+  MANUAL
+}
+
+enum MediaRole {
+  MAIN
+  GALLERY
+  ATMOSPHERE
+  PRINT_TEMPLATE
+  DATASHEET
+}
+
+// --- Identiteit en rechten -------------------------------------------------
+
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @unique
+  name        String
+  isActive    Boolean   @default(true)
+  mfaEnabled  Boolean   @default(false)
+  lastLoginAt DateTime?
+
+  /// Gevuld bij een klantgebruiker (portaal). Leeg bij een interne medewerker.
+  /// De Prisma-extensie dwingt af dat portaalsessies alleen eigen data zien.
+  customerId String?   @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roles           UserRole[]
+  ownedOrders     Order[]          @relation("OrderOwner")
+  orderEvents     OrderEvent[]
+  auditLogs       AuditLog[]
+  tasksAssigned   Task[]           @relation("TaskAssignee")
+  tasksCreated    Task[]           @relation("TaskCreator")
+  documents       Document[]
+  documentVersion DocumentVersion[]
+
+  @@index([customerId])
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
+  name        String
+  description String?
+  /// Systeemrollen kunnen niet verwijderd worden.
+  isSystem    Boolean @default(false)
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+/// Permissies zijn "module:actie", bijvoorbeeld orders:approve. Ze staan in de
+/// database zodat rechten configureerbaar zijn zonder code te wijzigen.
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
+  module      String
+  action      String
+  description String?
+
+  roles RolePermission[]
+
+  @@unique([module, action])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String @db.Uuid
+  roleId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// --- CRM -------------------------------------------------------------------
+
+model Customer {
+  id     String @id @default(uuid()) @db.Uuid
+  /// Klantnummer uit NumberSequence. Formaat instelbaar, reeks voortzetbaar.
+  number String @unique
+
+  name      String
+  vatNumber String?
+  email     String?
+  phone     String?
+  website   String?
+  /// Interne opmerkingen, nooit zichtbaar in het klantportaal.
+  notes     String?
+  isActive  Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts   ContactPerson[]
+  addresses  Address[]
+  agreements CustomerAgreement[]
+  orders     Order[]
+  documents  Document[]
+  tasks      Task[]
+  portalUsers User[]
+
+  @@index([name])
+  @@map("customers")
+}
+
+model ContactPerson {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  jobTitle  String?
+  isPrimary Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([customerId])
+  @@map("contact_persons")
+}
+
+model Address {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  type        AddressType
+  /// Vrij label, bijvoorbeeld "Hoofdkantoor" of "Vestiging Zwolle".
+  label       String?
+  attention   String?
+  street      String
+  houseNumber String?
+  postalCode  String
+  city        String
+  country     String      @default("NL")
+  isDefault   Boolean     @default(false)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoiceOrders  Order[] @relation("OrderInvoiceAddress")
+  deliveryOrders Order[] @relation("OrderDeliveryAddress")
+
+  @@index([customerId, type])
+  @@map("addresses")
+}
+
+model CustomerAgreement {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  title     String
+  body      String
+  validFrom DateTime?
+  validTo   DateTime?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("customer_agreements")
+}
+
+// --- Leveranciers ----------------------------------------------------------
+
+model Supplier {
+  id        String  @id @default(uuid()) @db.Uuid
+  code      String  @unique
+  name      String
+  /// PSI-nummer, indien bekend.
+  psiNumber String?
+  email     String?
+  phone     String?
+  website   String?
+  notes     String?
+  isActive  Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts         SupplierContact[]
+  productSuppliers ProductSupplier[]
+  orderLines       OrderLine[]
+  mediaAssets      MediaAsset[]
+
+  @@map("suppliers")
+}
+
+model SupplierContact {
+  id         String   @id @default(uuid()) @db.Uuid
+  supplierId String   @db.Uuid
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  jobTitle  String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([supplierId])
+  @@map("supplier_contacts")
+}
+
+// --- Eigen catalogus -------------------------------------------------------
+// Dit is de gecureerde laag. Ruwe leveranciersdata landt in de stagingtabellen
+// uit stap 1b en komt hier alleen via mapping en goedkeuring terecht.
+
+model ProductCategory {
+  id       String            @id @default(uuid()) @db.Uuid
+  parentId String?           @db.Uuid
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children ProductCategory[] @relation("CategoryTree")
+
+  name String
+  slug String @unique
+  /// Volledig pad, bijvoorbeeld "drinkware/thermosbekers". Voor snelle filters.
+  path String
+  sort Int    @default(0)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  @@index([parentId])
+  @@index([path])
+  @@map("product_categories")
+}
+
+model Product {
+  id            String  @id @default(uuid()) @db.Uuid
+  /// Eigen artikelnummer, onafhankelijk van leveranciersnummers.
+  articleNumber String  @unique
+  name          String
+  description   String?
+  brand         String?
+
+  categoryId String?          @db.Uuid
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  isActive Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants     ProductVariant[]
+  suppliers    ProductSupplier[]
+  salesTiers   SalesPriceTier[]
+  printOptions ProductPrintOption[]
+  media        ProductMedia[]
+  fieldSources ProductFieldSource[]
+  orderLines   OrderLine[]
+
+  @@index([name])
+  @@index([categoryId])
+  @@map("products")
+}
+
+/// Kleur- en maatvarianten. Genormaliseerde waarden; de mapping van
+/// leveranciersbenamingen ("navy", "NY", "donkerblauw") gebeurt bij import.
+model ProductVariant {
+  id        String  @id @default(uuid()) @db.Uuid
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  sku       String  @unique
+  colorName String?
+  colorHex  String?
+  size      String?
+  eanCode   String?
+  isActive  Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderLines OrderLine[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+/// Eén product kan bij meerdere leveranciers ingekocht worden.
+model ProductSupplier {
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @db.Uuid
+  supplierId String   @db.Uuid
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  /// Artikelnummer zoals de leverancier het noemt. Sleutel bij import.
+  supplierArticleNumber String
+  purchasePrice         Decimal @db.Decimal(14, 4)
+  currency              String  @default("EUR")
+  minimumOrderQuantity  Int     @default(1)
+  leadTimeDays          Int?
+  isPreferred           Boolean @default(false)
+  isActive              Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseTiers PurchasePriceTier[]
+  orderLines    OrderLine[]
+
+  @@unique([supplierId, supplierArticleNumber])
+  @@index([productId])
+  @@map("product_suppliers")
+}
+
+model PurchasePriceTier {
+  id                String          @id @default(uuid()) @db.Uuid
+  productSupplierId String          @db.Uuid
+  productSupplier   ProductSupplier @relation(fields: [productSupplierId], references: [id], onDelete: Cascade)
+
+  minQuantity Int
+  unitPrice   Decimal @db.Decimal(14, 4)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([productSupplierId, minQuantity])
+  @@map("purchase_price_tiers")
+}
+
+/// Verkoopstaffels. Kunnen uit de prijsengine komen of handmatig vastgezet
+/// zijn; validFrom/validTo maakt een prijsverhoging vooruit klaarzetten mogelijk.
+model SalesPriceTier {
+  id        String  @id @default(uuid()) @db.Uuid
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  minQuantity Int
+  unitPrice   Decimal   @db.Decimal(14, 4)
+  validFrom   DateTime?
+  validTo     DateTime?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([productId, minQuantity])
+  @@map("sales_price_tiers")
+}
+
+/// Genormaliseerde bedrukkingstechniek: zeefdruk, tampondruk, laser, doming.
+model PrintMethod {
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
+  name        String
+  description String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  productOptions ProductPrintOption[]
+  printJobs      OrderLinePrintJob[]
+
+  @@map("print_methods")
+}
+
+model ProductPrintOption {
+  id            String      @id @default(uuid()) @db.Uuid
+  productId     String      @db.Uuid
+  printMethodId String      @db.Uuid
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  printMethod   PrintMethod @relation(fields: [printMethodId], references: [id], onDelete: Restrict)
+
+  /// Bedrukkingspositie, bijvoorbeeld "voorzijde" of "deksel".
+  position  String?
+  maxColors Int     @default(1)
+  /// Maximale bedrukkingsafmeting, vrije tekst zoals leveranciers die geven.
+  printArea String?
+  /// Instelkosten per order, los van de stuksprijs.
+  setupCost Decimal @db.Decimal(14, 4) @default(0)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  priceTiers PrintPriceTier[]
+
+  @@unique([productId, printMethodId, position])
+  @@map("product_print_options")
+}
+
+/// Staffel voor bedrukkingskosten: per aantal kleuren en per aantal stuks.
+/// Dit is het model waar de verschillen tussen leveranciers samenkomen.
+model PrintPriceTier {
+  id                   String             @id @default(uuid()) @db.Uuid
+  productPrintOptionId String             @db.Uuid
+  productPrintOption   ProductPrintOption @relation(fields: [productPrintOptionId], references: [id], onDelete: Cascade)
+
+  colors      Int     @default(1)
+  minQuantity Int
+  unitPrice   Decimal @db.Decimal(14, 4)
+  setupCost   Decimal @db.Decimal(14, 4) @default(0)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([productPrintOptionId, colors, minQuantity])
+  @@map("print_price_tiers")
+}
+
+/// Gedownloade media. Leveranciers halen URL's offline; daarom nooit hotlinken.
+model MediaAsset {
+  id         String    @id @default(uuid()) @db.Uuid
+  storageKey String    @unique
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  checksum   String
+  width      Int?
+  height     Int?
+  /// Oorspronkelijke URL bij de leverancier, voor herkomst en herdownload.
+  sourceUrl  String?
+  supplierId String?   @db.Uuid
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  products ProductMedia[]
+
+  @@index([checksum])
+  @@map("media_assets")
+}
+
+model ProductMedia {
+  productId    String     @db.Uuid
+  mediaAssetId String     @db.Uuid
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+
+  role MediaRole @default(GALLERY)
+  sort Int       @default(0)
+
+  @@id([productId, mediaAssetId])
+  @@index([productId, role])
+  @@map("product_media")
+}
+
+/// Veldeigendom: welk veld is door een mens gezet en mag niet overschreven
+/// worden door een import. Zie ADR-0004.
+model ProductFieldSource {
+  id        String  @id @default(uuid()) @db.Uuid
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  field    String
+  source   FieldSource @default(SUPPLIER)
+  /// Expliciet slot: ook een handmatige wijziging elders mag dit niet raken.
+  isLocked Boolean     @default(false)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, field])
+  @@map("product_field_sources")
+}
+
+// --- Offertes en orders ----------------------------------------------------
+// Offerte en order zijn één aggregaat met een `kind`, niet twee tabellen.
+// De orderdetailpagina is het belangrijkste scherm; die bouw je niet twee keer.
+
+model Order {
+  id     String    @id @default(uuid()) @db.Uuid
+  number String    @unique
+  kind   OrderKind @default(QUOTE)
+
+  customerId      String         @db.Uuid
+  customer        Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contactPersonId String?        @db.Uuid
+  contactPerson   ContactPerson? @relation(fields: [contactPersonId], references: [id], onDelete: SetNull)
+
+  /// Verantwoordelijke medewerker. Orders zijn overdraagbaar; iedere
+  /// wijziging komt in de tijdlijn als OWNER_CHANGED.
+  ownerId String? @db.Uuid
+  owner   User?   @relation("OrderOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  invoiceAddressId  String?  @db.Uuid
+  invoiceAddress    Address? @relation("OrderInvoiceAddress", fields: [invoiceAddressId], references: [id], onDelete: SetNull)
+  deliveryAddressId String?  @db.Uuid
+  deliveryAddress   Address? @relation("OrderDeliveryAddress", fields: [deliveryAddressId], references: [id], onDelete: SetNull)
+
+  orderDate               DateTime  @default(now())
+  requestedDeliveryDate   DateTime?
+  expectedDeliveryDate    DateTime?
+
+  status        OrderStatus   @default(DRAFT)
+  financeStatus FinanceStatus @default(NOT_INVOICEABLE)
+  vatRegime     VatRegime     @default(DOMESTIC)
+  currency      String        @default("EUR")
+
+  reference String?
+  notes     String?
+
+  /// Bij conversie offerte -> order blijft de herkomst zichtbaar.
+  convertedFromOrderId String? @unique @db.Uuid
+  convertedFromOrder   Order?  @relation("QuoteConversion", fields: [convertedFromOrderId], references: [id], onDelete: SetNull)
+  convertedToOrder     Order?  @relation("QuoteConversion")
+
+  /// Totalen worden altijd server-side herberekend uit de vastgelegde
+  /// regelwaarden, nooit uit de live productprijs.
+  subtotalExclVat Decimal @default(0) @db.Decimal(14, 2)
+  vatAmount       Decimal @default(0) @db.Decimal(14, 2)
+  totalInclVat    Decimal @default(0) @db.Decimal(14, 2)
+  purchaseTotal   Decimal @default(0) @db.Decimal(14, 2)
+  marginAmount    Decimal @default(0) @db.Decimal(14, 2)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines     OrderLine[]
+  events    OrderEvent[]
+  documents Document[]
+  tasks     Task[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([kind, status])
+  @@index([ownerId])
+  @@index([orderDate])
+  @@map("orders")
+}
+
+model OrderLine {
+  id         String @id @default(uuid()) @db.Uuid
+  orderId    String @db.Uuid
+  order      Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  lineNumber Int
+
+  productId         String?          @db.Uuid
+  product           Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productVariantId  String?          @db.Uuid
+  productVariant    ProductVariant?  @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  productSupplierId String?          @db.Uuid
+  productSupplier   ProductSupplier? @relation(fields: [productSupplierId], references: [id], onDelete: SetNull)
+  supplierId        String?          @db.Uuid
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  // --- Momentopname bij aanmaak. Een latere productwijziging raakt dit niet.
+  productArticleNumber String?
+  productName          String
+  variantDescription   String?
+  supplierName         String?
+  description          String?
+
+  quantity        Int
+  unitSalePrice     Decimal @db.Decimal(14, 4)
+  unitPurchasePrice Decimal @default(0) @db.Decimal(14, 4)
+  discountPercent   Decimal @default(0) @db.Decimal(5, 2)
+  setupCost         Decimal @default(0) @db.Decimal(14, 4)
+  vatRate           Decimal @default(21) @db.Decimal(5, 2)
+
+  /// Afgeronde regelbedragen. Btw per regel op twee decimalen (ADR-0005);
+  /// het ordertotaal is de som van deze afgeronde bedragen.
+  lineSubtotalExclVat Decimal @default(0) @db.Decimal(14, 2)
+  lineVatAmount       Decimal @default(0) @db.Decimal(14, 2)
+  lineTotalInclVat    Decimal @default(0) @db.Decimal(14, 2)
+  linePurchaseTotal   Decimal @default(0) @db.Decimal(14, 2)
+  lineMarginAmount    Decimal @default(0) @db.Decimal(14, 2)
+
+  /// Statussen staan per regel: een order kan regel 1 geleverd en regel 3
+  /// wachtend op drukproef hebben. De order toont een samenvatting.
+  proofStatus     ProofStatus     @default(NOT_REQUIRED)
+  purchaseStatus  PurchaseStatus  @default(NOT_ORDERED)
+  logisticsStatus LogisticsStatus @default(NONE)
+
+  expectedDeliveryDate DateTime?
+  notes                String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  printJobs OrderLinePrintJob[]
+  events    OrderEvent[]
+  documents Document[]
+
+  @@unique([orderId, lineNumber])
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([proofStatus])
+  @@index([purchaseStatus])
+  @@index([logisticsStatus])
+  @@map("order_lines")
+}
+
+model OrderLinePrintJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  orderLineId String    @db.Uuid
+  orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+
+  printMethodId String?      @db.Uuid
+  printMethod   PrintMethod? @relation(fields: [printMethodId], references: [id], onDelete: SetNull)
+
+  /// Ook de techniek is een momentopname: naam blijft bewaard als de
+  /// genormaliseerde techniek later wijzigt.
+  printMethodName String
+  position        String?
+  colors          Int     @default(1)
+  unitPrice       Decimal @default(0) @db.Decimal(14, 4)
+  setupCost       Decimal @default(0) @db.Decimal(14, 4)
+  notes           String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderLineId])
+  @@map("order_line_print_jobs")
+}
+
+/// Append-only tijdlijn. Gebeurtenissen worden nooit gewijzigd of verwijderd.
+model OrderEvent {
+  id          String     @id @default(uuid()) @db.Uuid
+  orderId     String     @db.Uuid
+  order       Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderLineId String?    @db.Uuid
+  orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+
+  type            OrderEventType
+  statusDimension StatusDimension?
+  fromValue       String?
+  toValue         String?
+
+  /// Leeg bij een gebeurtenis die door een achtergrondtaak is veroorzaakt.
+  userId String? @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  occurredAt DateTime @default(now())
+  note       String?
+  payload    Json?
+
+  @@index([orderId, occurredAt])
+  @@index([orderLineId])
+  @@map("order_events")
+}
+
+// --- Documenten ------------------------------------------------------------
+
+model Document {
+  id       String             @id @default(uuid()) @db.Uuid
+  category DocumentCategory
+  title    String
+  /// INTERNAL blijft onzichtbaar in het klantportaal.
+  visibility DocumentVisibility @default(INTERNAL)
+
+  customerId  String?    @db.Uuid
+  customer    Customer?  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId     String?    @db.Uuid
+  order       Order?     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderLineId String?    @db.Uuid
+  orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions DocumentVersion[]
+
+  @@index([customerId])
+  @@index([orderId])
+  @@index([category])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  versionNumber Int
+  storageKey    String @unique
+  fileName      String
+  mimeType      String
+  sizeBytes     Int
+  checksum      String
+
+  uploadedById String?  @db.Uuid
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedAt   DateTime @default(now())
+  note         String?
+
+  @@unique([documentId, versionNumber])
+  @@map("document_versions")
+}
+
+// --- Taken en samenwerking -------------------------------------------------
+
+model Task {
+  id          String  @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+
+  assigneeId  String? @db.Uuid
+  assignee    User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  orderId    String?   @db.Uuid
+  order      Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId String?   @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  dueDate     DateTime?
+  priority    TaskPriority @default(NORMAL)
+  status      TaskStatus   @default(OPEN)
+  completedAt DateTime?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([assigneeId, status])
+  @@index([orderId])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+// --- Systeem ---------------------------------------------------------------
+
+/// Uitgifte van unieke nummers onder een rij-lock. Formaat en startwaarde zijn
+/// instelbaar, ook nadat er nummers zijn uitgegeven, zodat bestaande reeksen
+/// uit Teamleader voortgezet kunnen worden (ADR-0005).
+model NumberSequence {
+  id   String @id @default(uuid()) @db.Uuid
+  key  String
+  /// 0 voor reeksen die niet per jaar lopen, zoals klantnummers.
+  year Int    @default(0)
+
+  /// Plaatshouders: {year} en {counter:n} voor n cijfers met voorloopnullen.
+  format    String
+  lastValue Int    @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, year])
+  @@map("number_sequences")
+}
+
+model VatRate {
+  id         String  @id @default(uuid()) @db.Uuid
+  code       String  @unique
+  name       String
+  percentage Decimal @db.Decimal(5, 2)
+  isDefault  Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  @@map("vat_rates")
+}
+
+/// Instellingen die zonder migratie te wijzigen moeten zijn, zoals
+/// vat.rounding en de standaard btw-code.
+model Setting {
+  key         String   @id
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
+
+/// Auditlog op iedere betekenisvolle handeling. Append-only.
+model AuditLog {
+  id       String      @id @default(uuid()) @db.Uuid
+  entity   String
+  entityId String
+  action   AuditAction
+
+  userId String? @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  occurredAt DateTime @default(now())
+  /// Alleen de gewijzigde velden, als { veld: { van, naar } }.
+  diff       Json?
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([occurredAt])
+  @@map("audit_logs")
+}
