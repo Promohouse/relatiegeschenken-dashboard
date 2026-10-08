@@ -49,3 +49,20 @@ zodat er geen Redis en dus geen Docker nodig is.
 Node 26.7.0 is de huidige versie, geen LTS; NestJS en Prisma worden getest op
 22 en 24. We bouwen voorlopig op 26. Bij onverklaarbare bouwfouten: Node 24 LTS
 installeren via `fnm` en vastpinnen in `.nvmrc`.
+
+## Afbakening: dit besluit geldt alleen lokaal
+
+Alles hierboven gaat over de **ontwikkelmachine**. De productieomgeving komt op
+een **eigen server**, niet op een server die al voor een ander project in
+gebruik is. Daar geldt dus:
+
+- eigen PostgreSQL-instantie, alleen voor dit systeem
+- `shared_buffers` en `max_connections` afgestemd op deze applicatie, geen
+  concurrentie met andere projecten
+- eigen back-up- en herstelprocedure, met een restore-test
+- de compose-opzet in `docker/` is daarvoor het vertrekpunt
+
+Het gedeelde geheugen en de gedeelde back-up van de lokale instantie zijn
+daarmee een ontwikkelongemak, geen eigenschap van het systeem. De keuze voor
+een eigen server in productie staat vast; de concrete invulling (hosting,
+omvang, deploymethode) volgt in een eigen ADR zodra Fase 1 af is.
