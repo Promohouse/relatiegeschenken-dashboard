@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.tsbuildinfo
+
+# omgeving - nooit committen
+.env
+.env.*
+!.env.example
+
+# lokale bestandsopslag (StoragePort / LocalDiskAdapter)
+storage/
+uploads/
+
+# leveranciersdata: ruwe feeds en downloads blijven buiten git
+data/suppliers/
+*.log
+
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+playwright-report/
+test-results/

@@ -1,0 +1,16 @@
+{
+  "name": "relatiegeschenken-hub",
+  "private": true,
+  "version": "0.0.0",
+  "description": "ERP/CRM voor relatiegeschenken, promotionele artikelen en bedrukte producten",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:guard": "node scripts/db-guard.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
