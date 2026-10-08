@@ -487,12 +487,170 @@ async function seedDemoOrders(users: { id: string; email: string }[]) {
   console.log(`  demo: ${customers.length} klanten, ${created} nieuwe orders met regels, tijdlijn, document en taak`)
 }
 
+// --- Demo: koppelconfiguratie en kanalen ----------------------------------
+
+/**
+ * Verbindingen per leverancier, opgezet volgens wat deze leveranciers volgens
+ * het onderzoek aanbieden (docs/leveranciers/koppelingen.md).
+ *
+ * Alle verbindingen staan op isActive = false: er zijn nog geen credentials en
+ * de specificaties zijn niet geverifieerd. Zo staat de capability-routing wel
+ * klaar, maar kan niemand denken dat er al data binnenkomt.
+ */
+interface CapabilityDefinition {
+  capability: 'CATALOG' | 'MEDIA' | 'PRICE_TIERS' | 'INVENTORY' | 'PLACE_ORDER' | 'ORDER_STATUS' | 'SHIPPING'
+  priority: number
+  /** Cron-uitdrukking; leeg betekent alleen handmatig of op gebeurtenis. */
+  schedule?: string
+}
+
+interface ConnectionDefinition {
+  supplier: string
+  key: string
+  connectorKey: string
+  transport: 'REST' | 'SOAP' | 'XML_FEED' | 'CSV_FEED' | 'SFTP' | 'FTP' | 'FILE_UPLOAD'
+  notes: string
+  capabilities: CapabilityDefinition[]
+}
+
+async function seedConnections() {
+  const demo = { isDemo: true }
+
+  const definitions: ConnectionDefinition[] = [
+    {
+      supplier: 'PFCONCEPT', key: 'pfconcept-xml', connectorKey: 'pfconcept-xml', transport: 'XML_FEED',
+      notes: 'Product-, Price-, Print- en Decoration-XML plus afbeeldingen, dagelijks.',
+      capabilities: [
+        { capability: 'CATALOG', priority: 10, schedule: '0 3 * * *' },
+        { capability: 'PRICE_TIERS', priority: 10, schedule: '0 3 * * *' },
+        { capability: 'MEDIA', priority: 10, schedule: '30 3 * * *' },
+        { capability: 'INVENTORY', priority: 50, schedule: '0 7,15 * * *' },
+      ],
+    },
+    {
+      supplier: 'PFCONCEPT', key: 'pfconcept-gateway', connectorKey: 'pfconcept-gateway', transport: 'REST',
+      notes: 'Gateway voor het plaatsen van orders en het ophalen van de status.',
+      capabilities: [
+        { capability: 'PLACE_ORDER', priority: 10 },
+        { capability: 'ORDER_STATUS', priority: 10, schedule: '0 8,16 * * *' },
+      ],
+    },
+    {
+      supplier: 'ANDA', key: 'anda-rest', connectorKey: 'anda-rest', transport: 'REST',
+      notes: 'REST plus feeds voor product, prijs, voorraad, labeling info en labeling price.',
+      capabilities: [
+        { capability: 'CATALOG', priority: 10, schedule: '0 3 * * *' },
+        { capability: 'PRICE_TIERS', priority: 10, schedule: '0 3 * * *' },
+        { capability: 'INVENTORY', priority: 10, schedule: '0 * * * *' },
+        { capability: 'PLACE_ORDER', priority: 10 },
+      ],
+    },
+    {
+      supplier: 'MIDOCEAN', key: 'midocean-sftp', connectorKey: 'midocean-sftp', transport: 'SFTP',
+      notes: 'Productdata via SFTP in XML (Prodinfo). Toegang aanvragen via het portaal.',
+      capabilities: [
+        { capability: 'CATALOG', priority: 10, schedule: '0 2 * * *' },
+        { capability: 'MEDIA', priority: 10, schedule: '30 2 * * *' },
+        { capability: 'PRICE_TIERS', priority: 10, schedule: '0 2 * * *' },
+      ],
+    },
+    {
+      supplier: 'MIDOCEAN', key: 'midocean-api', connectorKey: 'midocean-api', transport: 'REST',
+      notes: 'Customer API voor voorraad, ordermanagement en drukconfiguratie.',
+      capabilities: [
+        { capability: 'INVENTORY', priority: 10, schedule: '0 * * * *' },
+        { capability: 'PLACE_ORDER', priority: 10 },
+        { capability: 'ORDER_STATUS', priority: 10, schedule: '0 8,16 * * *' },
+      ],
+    },
+    {
+      supplier: 'CLIPPER', key: 'clipper-ftp', connectorKey: 'generic-file', transport: 'FTP',
+      notes: 'FTP met productdata en fotos. Eigen credentials aanvragen bij de accountmanager.',
+      capabilities: [
+        { capability: 'CATALOG', priority: 10, schedule: '0 4 * * *' },
+        { capability: 'MEDIA', priority: 10 },
+      ],
+    },
+    {
+      supplier: 'TOPPOINT', key: 'toppoint-file', connectorKey: 'generic-file', transport: 'FILE_UPLOAD',
+      notes: 'Geen koppeling bekend. Voorlopig handmatige bestandsimport van de prijslijst.',
+      capabilities: [{ capability: 'CATALOG', priority: 10 }],
+    },
+  ]
+
+  for (const def of definitions) {
+    const supplier = await prisma.supplier.findUniqueOrThrow({ where: { code: def.supplier } })
+    const connection = await prisma.supplierConnection.upsert({
+      where: { key: def.key },
+      update: { notes: def.notes, transport: def.transport },
+      create: {
+        supplierId: supplier.id,
+        key: def.key,
+        connectorKey: def.connectorKey,
+        transport: def.transport,
+        isActive: false,
+        notes: def.notes,
+        ...demo,
+      },
+    })
+
+    for (const cap of def.capabilities) {
+      await prisma.supplierConnectionCapability.upsert({
+        where: { connectionId_capability: { connectionId: connection.id, capability: cap.capability } },
+        update: { priority: cap.priority, schedule: cap.schedule ?? null },
+        create: {
+          connectionId: connection.id,
+          capability: cap.capability,
+          priority: cap.priority,
+          schedule: cap.schedule ?? null,
+          ...demo,
+        },
+      })
+    }
+  }
+
+  const capCount = await prisma.supplierConnectionCapability.count()
+  console.log(`  demo: ${definitions.length} leveranciersverbindingen met ${capCount} capabilities (alle inactief, geen credentials)`)
+}
+
+async function seedChannels() {
+  const demo = { isDemo: true }
+
+  const channel = await prisma.shopChannel.upsert({
+    where: { key: 'webshop' },
+    update: { name: 'Eigen webshop' },
+    create: { key: 'webshop', name: 'Eigen webshop', type: 'PUBLIC', ...demo },
+  })
+
+  const products = await prisma.product.findMany({ where: { isDemo: true }, select: { id: true } })
+  for (const [i, product] of products.entries()) {
+    await prisma.channelAssortmentItem.upsert({
+      where: { channelId_productId: { channelId: channel.id, productId: product.id } },
+      update: {},
+      create: { channelId: channel.id, productId: product.id, sort: i, ...demo },
+    })
+  }
+
+  // Eén vertrekpunt-margeregel. Specifiekere regels per leverancier,
+  // categorie of klant krijgen een lagere priority en gaan daarmee voor.
+  const existing = await prisma.priceRule.findFirst({ where: { scope: 'GLOBAL', isDemo: true } })
+  if (!existing) {
+    await prisma.priceRule.create({
+      data: { scope: 'GLOBAL', marginPercent: '110.00', priority: 1000, ...demo },
+    })
+  }
+
+  console.log(`  demo: 1 kanaal met ${products.length} producten in het assortiment, 1 globale margeregel`)
+}
+
 async function main() {
   console.log('seed start')
   await seedPermissions()
   await seedBaseData()
   const { users } = await seedDemo()
   await seedDemoOrders(users)
+  await seedConnections()
+  await seedChannels()
 
   const counts = {
     klanten: await prisma.customer.count(),
@@ -500,6 +658,8 @@ async function main() {
     orderregels: await prisma.orderLine.count(),
     gebeurtenissen: await prisma.orderEvent.count(),
     producten: await prisma.product.count(),
+    verbindingen: await prisma.supplierConnection.count(),
+    kanalen: await prisma.shopChannel.count(),
     demorijen: await prisma.customer.count({ where: { isDemo: true } }),
   }
   console.log('seed klaar:', counts)

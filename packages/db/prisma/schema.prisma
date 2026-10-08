@@ -199,14 +199,18 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roles           UserRole[]
-  ownedOrders     Order[]          @relation("OrderOwner")
-  orderEvents     OrderEvent[]
-  auditLogs       AuditLog[]
-  tasksAssigned   Task[]           @relation("TaskAssignee")
-  tasksCreated    Task[]           @relation("TaskCreator")
-  documents       Document[]
-  documentVersion DocumentVersion[]
+  roles                   UserRole[]
+  ownedOrders             Order[]           @relation("OrderOwner")
+  orderEvents             OrderEvent[]
+  auditLogs               AuditLog[]
+  tasksAssigned           Task[]            @relation("TaskAssignee")
+  tasksCreated            Task[]            @relation("TaskCreator")
+  documents               Document[]
+  documentVersion         DocumentVersion[]
+  proofApprovals          ProofApproval[]
+  reviewedChanges         StagedChange[]
+  invoicesContentApproved PurchaseInvoice[] @relation("InvoiceContentApprover")
+  invoicesFinanceApproved PurchaseInvoice[] @relation("InvoiceFinanceApprover")
 
   @@index([customerId])
   @@map("users")
@@ -281,13 +285,15 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  contacts   ContactPerson[]
-  addresses  Address[]
-  agreements CustomerAgreement[]
-  orders     Order[]
-  documents  Document[]
-  tasks      Task[]
+  contacts    ContactPerson[]
+  addresses   Address[]
+  agreements  CustomerAgreement[]
+  orders      Order[]
+  documents   Document[]
+  tasks       Task[]
   portalUsers User[]
+  channels    ShopChannel[]
+  priceRules  PriceRule[]
 
   @@index([name])
   @@map("customers")
@@ -310,7 +316,8 @@ model ContactPerson {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders Order[]
+  orders         Order[]
+  proofApprovals ProofApproval[]
 
   @@index([customerId])
   @@map("contact_persons")
@@ -383,6 +390,10 @@ model Supplier {
   productSuppliers ProductSupplier[]
   orderLines       OrderLine[]
   mediaAssets      MediaAsset[]
+  connections      SupplierConnection[]
+  purchaseOrders   PurchaseOrder[]
+  purchaseInvoices PurchaseInvoice[]
+  priceRules       PriceRule[]
 
   @@map("suppliers")
 }
@@ -426,7 +437,8 @@ model ProductCategory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products Product[]
+  products   Product[]
+  priceRules PriceRule[]
 
   @@index([parentId])
   @@index([path])
@@ -457,6 +469,8 @@ model Product {
   media        ProductMedia[]
   fieldSources ProductFieldSource[]
   orderLines   OrderLine[]
+  channelItems ChannelAssortmentItem[]
+  priceRules   PriceRule[]
 
   @@index([name])
   @@index([categoryId])
@@ -508,8 +522,9 @@ model ProductSupplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  purchaseTiers PurchasePriceTier[]
-  orderLines    OrderLine[]
+  purchaseTiers      PurchasePriceTier[]
+  orderLines         OrderLine[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([supplierId, supplierArticleNumber])
   @@index([productId])
@@ -579,7 +594,7 @@ model ProductPrintOption {
   /// Maximale bedrukkingsafmeting, vrije tekst zoals leveranciers die geven.
   printArea String?
   /// Instelkosten per order, los van de stuksprijs.
-  setupCost Decimal @db.Decimal(14, 4) @default(0)
+  setupCost Decimal @default(0) @db.Decimal(14, 4)
 
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -601,7 +616,7 @@ model PrintPriceTier {
   colors      Int     @default(1)
   minQuantity Int
   unitPrice   Decimal @db.Decimal(14, 4)
-  setupCost   Decimal @db.Decimal(14, 4) @default(0)
+  setupCost   Decimal @default(0) @db.Decimal(14, 4)
 
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -690,9 +705,9 @@ model Order {
   deliveryAddressId String?  @db.Uuid
   deliveryAddress   Address? @relation("OrderDeliveryAddress", fields: [deliveryAddressId], references: [id], onDelete: SetNull)
 
-  orderDate               DateTime  @default(now())
-  requestedDeliveryDate   DateTime?
-  expectedDeliveryDate    DateTime?
+  orderDate             DateTime  @default(now())
+  requestedDeliveryDate DateTime?
+  expectedDeliveryDate  DateTime?
 
   status        OrderStatus   @default(DRAFT)
   financeStatus FinanceStatus @default(NOT_INVOICEABLE)
@@ -754,7 +769,7 @@ model OrderLine {
   supplierName         String?
   description          String?
 
-  quantity        Int
+  quantity          Int
   unitSalePrice     Decimal @db.Decimal(14, 4)
   unitPurchasePrice Decimal @default(0) @db.Decimal(14, 4)
   discountPercent   Decimal @default(0) @db.Decimal(5, 2)
@@ -782,9 +797,11 @@ model OrderLine {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  printJobs OrderLinePrintJob[]
-  events    OrderEvent[]
-  documents Document[]
+  printJobs          OrderLinePrintJob[]
+  events             OrderEvent[]
+  documents          Document[]
+  proofs             Proof[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([orderId, lineNumber])
   @@index([orderId])
@@ -849,9 +866,9 @@ model OrderEvent {
 // --- Documenten ------------------------------------------------------------
 
 model Document {
-  id       String             @id @default(uuid()) @db.Uuid
-  category DocumentCategory
-  title    String
+  id         String             @id @default(uuid()) @db.Uuid
+  category   DocumentCategory
+  title      String
   /// INTERNAL blijft onzichtbaar in het klantportaal.
   visibility DocumentVisibility @default(INTERNAL)
 
@@ -861,6 +878,13 @@ model Document {
   order       Order?     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderLineId String?    @db.Uuid
   orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+
+  proofId           String?          @db.Uuid
+  proof             Proof?           @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  purchaseOrderId   String?          @db.Uuid
+  purchaseOrder     PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseInvoiceId String?          @db.Uuid
+  purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
 
   createdById String? @db.Uuid
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -874,6 +898,9 @@ model Document {
   @@index([customerId])
   @@index([orderId])
   @@index([category])
+  @@index([proofId])
+  @@index([purchaseOrderId])
+  @@index([purchaseInvoiceId])
   @@map("documents")
 }
 
@@ -993,4 +1020,701 @@ model AuditLog {
   @@index([userId])
   @@index([occurredAt])
   @@map("audit_logs")
+}
+
+// ===========================================================================
+// Stap 1b
+// ===========================================================================
+
+// --- Leverancierskoppelingen en staging (ADR-0004) -------------------------
+
+enum ConnectorTransport {
+  REST
+  SOAP
+  XML_FEED
+  CSV_FEED
+  SFTP
+  FTP
+  /// Handmatig geupload bestand. Voor Clipper en Toppoint zolang die geen
+  /// koppeling bieden; zie docs/leveranciers/koppelingen.md.
+  FILE_UPLOAD
+}
+
+enum ConnectorCapability {
+  CATALOG
+  MEDIA
+  PRICE_TIERS
+  INVENTORY
+  PLACE_ORDER
+  ORDER_STATUS
+  SHIPPING
+}
+
+/// Eén verbinding met één leverancier via één transport. Een leverancier kan
+/// meerdere verbindingen hebben: catalogus via een nachtelijke feed, voorraad
+/// via een API.
+model SupplierConnection {
+  id         String   @id @default(uuid()) @db.Uuid
+  supplierId String   @db.Uuid
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  /// Unieke sleutel, bijvoorbeeld "pfconcept-xml" of "anda-rest".
+  key          String             @unique
+  connectorKey String
+  transport    ConnectorTransport
+  /// Niet-geheime instellingen: basis-URL, pad, tekenset, scheidingsteken.
+  config       Json               @default("{}")
+  /// Versleutelde credentials. Nooit in code of .env per leverancier;
+  /// ontsleutelen gebeurt met CONNECTOR_SECRET_KEY uit de omgeving.
+  credentials  Bytes?
+
+  isActive  Boolean   @default(true)
+  lastRunAt DateTime?
+  notes     String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  capabilities  SupplierConnectionCapability[]
+  importRuns    ImportRun[]
+  rawProducts   RawSupplierProduct[]
+  fieldMappings FieldMapping[]
+  valueMappings ValueMapping[]
+
+  @@index([supplierId])
+  @@map("supplier_connections")
+}
+
+/// Capability-routing: welke verbinding levert welke capability, met welke
+/// voorrang. De laagste priority onder de actieve rijen wint; de volgende is
+/// de terugvaloptie.
+model SupplierConnectionCapability {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  capability ConnectorCapability
+  isEnabled  Boolean             @default(true)
+  priority   Int                 @default(100)
+  /// Cron-uitdrukking; leeg betekent alleen handmatig of op gebeurtenis.
+  schedule   String?
+  lastRunAt  DateTime?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, capability])
+  @@index([capability, isEnabled, priority])
+  @@map("supplier_connection_capabilities")
+}
+
+enum ImportRunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  /// Afgerond, maar met fouten op regelniveau.
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+model ImportRun {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  capability ConnectorCapability
+  status     ImportRunStatus     @default(PENDING)
+  /// Bij een dry-run wordt niets toegepast; alleen de diff wordt berekend.
+  dryRun     Boolean             @default(false)
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  itemsSeen    Int     @default(0)
+  itemsChanged Int     @default(0)
+  itemsFailed  Int     @default(0)
+  errorSummary String?
+  log          Json?
+
+  items         ImportItem[]
+  stagedChanges StagedChange[]
+  rawProducts   RawSupplierProduct[]
+
+  @@index([connectionId, startedAt])
+  @@index([status])
+  @@map("import_runs")
+}
+
+enum ImportItemStatus {
+  OK
+  SKIPPED
+  FAILED
+}
+
+/// Eén regel uit een import. Eén kapot artikel mag de hele run niet slopen.
+model ImportItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  importRunId String    @db.Uuid
+  importRun   ImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+
+  externalId String
+  status     ImportItemStatus
+  message    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([importRunId, status])
+  @@map("import_items")
+}
+
+/// Ruwe leveranciersdata, onaangetast bewaard. De hash voorkomt dat
+/// ongewijzigde artikelen opnieuw verwerkt worden.
+model RawSupplierProduct {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  externalId String
+  payload    Json
+  /// SHA-256 over de gecanoniseerde payload.
+  hash       String
+  fetchedAt  DateTime @default(now())
+
+  importRunId String?    @db.Uuid
+  importRun   ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalId])
+  @@index([hash])
+  @@map("raw_supplier_products")
+}
+
+model FieldMapping {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  /// Pad in de ruwe payload, bijvoorbeeld "product.descriptions.nl".
+  sourcePath  String
+  /// Veld in de eigen catalogus, bijvoorbeeld "name".
+  targetField String
+  /// Optionele bewerking: trim, upper, parseDecimal, splitList.
+  transform   String?
+  isActive    Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, targetField, sourcePath])
+  @@map("field_mappings")
+}
+
+enum MappingDomain {
+  CATEGORY
+  COLOR
+  SIZE
+  PRINT_METHOD
+  UNIT
+  CURRENCY
+}
+
+/// Waardemapping: "navy", "NY" en "donkerblauw" naar één eigen waarde.
+/// Zonder deze laag is leveranciersdata onbruikbaar naast elkaar.
+model ValueMapping {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  domain      MappingDomain
+  sourceValue String
+  targetValue String
+  /// Verwijzing naar de eigen entiteit (categorie, bedrukkingstechniek).
+  targetId    String?       @db.Uuid
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, domain, sourceValue])
+  @@index([domain])
+  @@map("value_mappings")
+}
+
+enum StagedChangeType {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum StagedChangeStatus {
+  PENDING
+  APPLIED
+  REJECTED
+}
+
+/// Klaargezette wijziging uit een import. Per type wijziging is instelbaar of
+/// die automatisch wordt toegepast of eerst goedgekeurd moet worden.
+model StagedChange {
+  id          String    @id @default(uuid()) @db.Uuid
+  importRunId String    @db.Uuid
+  importRun   ImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+
+  /// Doelentiteit: Product, ProductSupplier, PurchasePriceTier, MediaAsset.
+  entityType String
+  entityId   String?            @db.Uuid
+  externalId String?
+  changeType StagedChangeType
+  status     StagedChangeStatus @default(PENDING)
+  /// Alleen de gewijzigde velden, als { veld: { van, naar } }.
+  diff       Json
+
+  reviewedById String?   @db.Uuid
+  reviewedBy   User?     @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  appliedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([importRunId, status])
+  @@index([status, entityType])
+  @@map("staged_changes")
+}
+
+// --- Drukproeven (Module G) ------------------------------------------------
+
+model Proof {
+  id          String    @id @default(uuid()) @db.Uuid
+  orderLineId String    @db.Uuid
+  orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+
+  versionNumber    Int
+  status           ProofStatus @default(REQUESTED)
+  requestedAt      DateTime    @default(now())
+  receivedAt       DateTime?
+  sentToCustomerAt DateTime?
+  decidedAt        DateTime?
+  notes            String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvals ProofApproval[]
+  documents Document[]
+
+  @@unique([orderLineId, versionNumber])
+  @@index([status])
+  @@map("proofs")
+}
+
+enum ProofDecision {
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+/// Goedkeuringshistorie. Een beslissing komt van een medewerker of, later via
+/// het klantportaal, van een contactpersoon van de klant.
+model ProofApproval {
+  id      String @id @default(uuid()) @db.Uuid
+  proofId String @db.Uuid
+  proof   Proof  @relation(fields: [proofId], references: [id], onDelete: Cascade)
+
+  decision           ProofDecision
+  decidedByUserId    String?        @db.Uuid
+  decidedByUser      User?          @relation(fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  decidedByContactId String?        @db.Uuid
+  decidedByContact   ContactPerson? @relation(fields: [decidedByContactId], references: [id], onDelete: SetNull)
+  decidedAt          DateTime       @default(now())
+  comment            String?
+
+  isDemo Boolean @default(false)
+
+  @@index([proofId])
+  @@map("proof_approvals")
+}
+
+// --- Inkoop (Module H) -----------------------------------------------------
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  IN_PRODUCTION
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id         String   @id @default(uuid()) @db.Uuid
+  number     String   @unique
+  supplierId String   @db.Uuid
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  status               PurchaseOrderStatus @default(DRAFT)
+  orderedAt            DateTime?
+  expectedDeliveryDate DateTime?
+  reference            String?
+  notes                String?
+
+  totalExclVat Decimal @default(0) @db.Decimal(14, 2)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines         PurchaseOrderLine[]
+  confirmations SupplierConfirmation[]
+  receipts      GoodsReceipt[]
+  documents     Document[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(uuid()) @db.Uuid
+  purchaseOrderId String        @db.Uuid
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  lineNumber      Int
+
+  /// Koppeling naar de verkoopregel waar deze inkoop voor is.
+  orderLineId       String?          @db.Uuid
+  orderLine         OrderLine?       @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+  productSupplierId String?          @db.Uuid
+  productSupplier   ProductSupplier? @relation(fields: [productSupplierId], references: [id], onDelete: SetNull)
+
+  description       String
+  quantity          Int
+  /// Bijgewerkt uit de ontvangstregels; maakt deelontvangsten zichtbaar.
+  quantityReceived  Int     @default(0)
+  unitPurchasePrice Decimal @db.Decimal(14, 4)
+  lineTotal         Decimal @default(0) @db.Decimal(14, 2)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receiptLines GoodsReceiptLine[]
+  invoiceLines PurchaseInvoiceLine[]
+
+  @@unique([purchaseOrderId, lineNumber])
+  @@index([orderLineId])
+  @@map("purchase_order_lines")
+}
+
+model SupplierConfirmation {
+  id              String        @id @default(uuid()) @db.Uuid
+  purchaseOrderId String        @db.Uuid
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  reference            String?
+  confirmedAt          DateTime  @default(now())
+  expectedDeliveryDate DateTime?
+  /// Ruwe bevestiging zoals ontvangen, voor herkomst en geschillen.
+  payload              Json?
+
+  isDemo Boolean @default(false)
+
+  @@index([purchaseOrderId])
+  @@map("supplier_confirmations")
+}
+
+/// Deelontvangst. Meerdere ontvangsten per inkooporder zijn normaal.
+model GoodsReceipt {
+  id              String        @id @default(uuid()) @db.Uuid
+  purchaseOrderId String        @db.Uuid
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  receivedAt   DateTime @default(now())
+  reference    String?
+  trackingCode String?
+  notes        String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  lines GoodsReceiptLine[]
+
+  @@index([purchaseOrderId])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptLine {
+  id                  String            @id @default(uuid()) @db.Uuid
+  goodsReceiptId      String            @db.Uuid
+  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId String            @db.Uuid
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+
+  quantity Int
+  notes    String?
+
+  isDemo Boolean @default(false)
+
+  @@index([goodsReceiptId])
+  @@index([purchaseOrderLineId])
+  @@map("goods_receipt_lines")
+}
+
+// --- Inkoopfacturen (Module I: voorbereid, nog niet gebouwd) ---------------
+
+enum PurchaseInvoiceStatus {
+  RECEIVED
+  MATCHED
+  CONTENT_APPROVED
+  FINANCE_APPROVED
+  DISPUTED
+  BOOKED
+  REJECTED
+}
+
+/// Bouwen we later. Het model staat er nu zodat de FK-richting vastligt en de
+/// factuurmodule niets hoeft te breken. Geen boekhoudkoppeling.
+model PurchaseInvoice {
+  id         String   @id @default(uuid()) @db.Uuid
+  supplierId String   @db.Uuid
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  invoiceNumber String
+  invoiceDate   DateTime
+  dueDate       DateTime?
+  currency      String    @default("EUR")
+
+  totalExclVat Decimal @default(0) @db.Decimal(14, 2)
+  vatAmount    Decimal @default(0) @db.Decimal(14, 2)
+  totalInclVat Decimal @default(0) @db.Decimal(14, 2)
+
+  status PurchaseInvoiceStatus @default(RECEIVED)
+
+  /// Gevuld als deze factuur een dubbele is van een eerdere.
+  duplicateOfId String?           @db.Uuid
+  duplicateOf   PurchaseInvoice?  @relation("InvoiceDuplicate", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates    PurchaseInvoice[] @relation("InvoiceDuplicate")
+
+  contentApprovedById String?   @db.Uuid
+  contentApprovedBy   User?     @relation("InvoiceContentApprover", fields: [contentApprovedById], references: [id], onDelete: SetNull)
+  contentApprovedAt   DateTime?
+  financeApprovedById String?   @db.Uuid
+  financeApprovedBy   User?     @relation("InvoiceFinanceApprover", fields: [financeApprovedById], references: [id], onDelete: SetNull)
+  financeApprovedAt   DateTime?
+  bookedAt            DateTime?
+
+  /// Ruwe bron: uitgelezen PDF- of UBL-inhoud.
+  sourcePayload Json?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines     PurchaseInvoiceLine[]
+  documents Document[]
+
+  /// Dubbele facturen signaleren: dezelfde leverancier kan hetzelfde
+  /// factuurnummer niet twee keer hebben.
+  @@unique([supplierId, invoiceNumber])
+  @@index([status])
+  @@map("purchase_invoices")
+}
+
+model PurchaseInvoiceLine {
+  id                String          @id @default(uuid()) @db.Uuid
+  purchaseInvoiceId String          @db.Uuid
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+
+  purchaseOrderLineId String?            @db.Uuid
+  purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id], onDelete: SetNull)
+
+  description String
+  quantity    Decimal @db.Decimal(14, 4)
+  unitPrice   Decimal @db.Decimal(14, 4)
+  vatRate     Decimal @default(21) @db.Decimal(5, 2)
+  lineTotal   Decimal @default(0) @db.Decimal(14, 2)
+
+  isDemo Boolean @default(false)
+
+  @@index([purchaseInvoiceId])
+  @@map("purchase_invoice_lines")
+}
+
+// --- Kanalen, prijsregels en partners (ADR-0004, uitgaande kant) -----------
+
+enum ChannelType {
+  /// Eigen publieke webshop.
+  PUBLIC
+  /// Besloten omgeving van één klant (Module K).
+  CUSTOMER
+  /// Partnerkanaal: wederverkoper, marktplaats of affiliate.
+  PARTNER
+}
+
+model ShopChannel {
+  id   String      @id @default(uuid()) @db.Uuid
+  key  String      @unique
+  name String
+  type ChannelType
+
+  customerId String?   @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  isActive Boolean @default(true)
+  settings Json    @default("{}")
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assortment      ChannelAssortmentItem[]
+  priceRules      PriceRule[]
+  feedExports     FeedExport[]
+  partnerAccounts PartnerAccount[]
+
+  @@index([type])
+  @@map("shop_channels")
+}
+
+model ChannelAssortmentItem {
+  id        String      @id @default(uuid()) @db.Uuid
+  channelId String      @db.Uuid
+  channel   ShopChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  productId String      @db.Uuid
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  isVisible         Boolean  @default(true)
+  sort              Int      @default(0)
+  /// Vaste prijs die de prijsregels overschrijft.
+  overrideUnitPrice Decimal? @db.Decimal(14, 4)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([channelId, productId])
+  @@index([channelId, isVisible])
+  @@map("channel_assortment_items")
+}
+
+enum PriceRuleScope {
+  GLOBAL
+  SUPPLIER
+  CATEGORY
+  PRODUCT
+  CUSTOMER
+  CHANNEL
+}
+
+/// Declaratieve margeregels. Eén prijsengine bedient het orderscherm, de
+/// webshop en de partnerfeeds (ADR-0005). Regels zijn geldig binnen een
+/// periode, zodat een verhoging vooruit klaargezet kan worden.
+model PriceRule {
+  id    String         @id @default(uuid()) @db.Uuid
+  scope PriceRuleScope
+
+  supplierId String?          @db.Uuid
+  supplier   Supplier?        @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  categoryId String?          @db.Uuid
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  productId  String?          @db.Uuid
+  product    Product?         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId String?          @db.Uuid
+  customer   Customer?        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  channelId  String?          @db.Uuid
+  channel    ShopChannel?     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  /// Vanaf welk aantal deze regel geldt.
+  minQuantity   Int      @default(1)
+  /// Marge als percentage op de inkoopprijs, of een vast opslagbedrag.
+  marginPercent Decimal? @db.Decimal(6, 2)
+  markupAmount  Decimal? @db.Decimal(14, 4)
+
+  /// Lagere waarde wint bij gelijke specificiteit.
+  priority  Int       @default(100)
+  validFrom DateTime?
+  validTo   DateTime?
+  isActive  Boolean   @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope, isActive, priority])
+  @@index([productId])
+  @@index([customerId])
+  @@map("price_rules")
+}
+
+enum FeedFormat {
+  CSV
+  XML
+  JSON
+  GOOGLE_SHOPPING
+}
+
+model FeedExport {
+  id        String      @id @default(uuid()) @db.Uuid
+  channelId String      @db.Uuid
+  channel   ShopChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  key      String     @unique
+  name     String
+  format   FeedFormat
+  isActive Boolean    @default(true)
+  settings Json       @default("{}")
+
+  lastGeneratedAt DateTime?
+  storageKey      String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([channelId])
+  @@map("feed_exports")
+}
+
+model PartnerAccount {
+  id   String @id @default(uuid()) @db.Uuid
+  name String
+
+  channelId String?      @db.Uuid
+  channel   ShopChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  contactEmail String?
+  isActive     Boolean @default(true)
+  notes        String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  apiKeys ApiKey[]
+
+  @@map("partner_accounts")
+}
+
+/// Alleen de hash van de sleutel wordt bewaard; de sleutel zelf is na
+/// aanmaken niet meer op te vragen.
+model ApiKey {
+  id   String @id @default(uuid()) @db.Uuid
+  name String
+
+  partnerAccountId String?         @db.Uuid
+  partnerAccount   PartnerAccount? @relation(fields: [partnerAccountId], references: [id], onDelete: Cascade)
+
+  keyHash String   @unique
+  /// Permissies in dezelfde module:actie-vorm als bij gebruikers.
+  scopes  String[] @default([])
+
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([partnerAccountId])
+  @@map("api_keys")
 }

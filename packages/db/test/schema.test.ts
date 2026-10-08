@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { config } from 'dotenv'
 import { resolve } from 'node:path'
 import { createPrismaClient, type Db } from '../src/index'
+import { uniqueNumber } from './helpers'
 
 config({ path: resolve(__dirname, '../../../.env') })
 
@@ -31,14 +32,14 @@ describe('schema-afspraken', () => {
   })
 
   it('staat geen twee klanten met hetzelfde klantnummer toe', async () => {
-    const number = `${Date.now()}`.slice(-8)
+    const number = uniqueNumber()
     await db.customer.create({ data: { number, name: `${tag} eerste` } })
     await expect(db.customer.create({ data: { number, name: `${tag} tweede` } })).rejects.toThrow()
   })
 
   it('bewaart bedragen exact, zonder floating-pointfout', async () => {
     const customer = await db.customer.create({
-      data: { number: `${Date.now()}`.slice(-8), name: `${tag} bedragen` },
+      data: { number: uniqueNumber(), name: `${tag} bedragen` },
     })
     const order = await db.order.create({
       data: {
@@ -58,7 +59,7 @@ describe('schema-afspraken', () => {
 
   it('houdt de eenheidsprijs op vier decimalen', async () => {
     const customer = await db.customer.create({
-      data: { number: `${Date.now()}`.slice(-8), name: `${tag} eenheidsprijs` },
+      data: { number: uniqueNumber(), name: `${tag} eenheidsprijs` },
     })
     const order = await db.order.create({
       data: { number: `TST-P-${Date.now()}`, customerId: customer.id },
@@ -77,7 +78,7 @@ describe('schema-afspraken', () => {
 
   it('staat geen twee orderregels met hetzelfde regelnummer toe', async () => {
     const customer = await db.customer.create({
-      data: { number: `${Date.now()}`.slice(-8), name: `${tag} regelnummer` },
+      data: { number: uniqueNumber(), name: `${tag} regelnummer` },
     })
     const order = await db.order.create({
       data: { number: `TST-R-${Date.now()}`, customerId: customer.id },
@@ -89,7 +90,7 @@ describe('schema-afspraken', () => {
 
   it('verwijdert orderregels en tijdlijn mee met de order', async () => {
     const customer = await db.customer.create({
-      data: { number: `${Date.now()}`.slice(-8), name: `${tag} cascade` },
+      data: { number: uniqueNumber(), name: `${tag} cascade` },
     })
     const order = await db.order.create({
       data: {
@@ -106,7 +107,7 @@ describe('schema-afspraken', () => {
 
   it('blokkeert het verwijderen van een klant met een order (onDelete: Restrict)', async () => {
     const customer = await db.customer.create({
-      data: { number: `${Date.now()}`.slice(-8), name: `${tag} restrict` },
+      data: { number: uniqueNumber(), name: `${tag} restrict` },
     })
     await db.order.create({ data: { number: `TST-X-${Date.now()}`, customerId: customer.id } })
     await expect(db.customer.delete({ where: { id: customer.id } })).rejects.toThrow()
@@ -114,7 +115,7 @@ describe('schema-afspraken', () => {
 
   it('markeert nieuwe rijen standaard niet als demodata', async () => {
     const customer = await db.customer.create({
-      data: { number: `${Date.now()}`.slice(-8), name: `${tag} demo-vlag` },
+      data: { number: uniqueNumber(), name: `${tag} demo-vlag` },
     })
     expect(customer.isDemo).toBe(false)
   })

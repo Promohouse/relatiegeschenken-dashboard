@@ -88,6 +88,17 @@ npm run typecheck      # TypeScript over de hele monorepo
 - Tests draaien tegen `relatiegeschenken_test`;
   `scripts/prepare-test-db.mjs` brengt die eerst op schema.
 
+## Waar wat hoort
+
+- **Pure domeinlogica** die front- en backend delen: `packages/contracts/src`
+  (geld en btw, hashing, inkoopberekeningen). Geen databasetoegang.
+- **Databasegebonden helpers**: `packages/db/src` (client, nummeruitgifte,
+  capability-routing).
+- **Leveranciersdata** landt altijd eerst in `raw_supplier_products` en
+  `staged_changes`, nooit rechtstreeks in `products`. Zie ADR-0004.
+- **Testgegevens** krijgen een uniek nummer via `test/helpers.ts`; vitest
+  draait testbestanden parallel, dus een tijdstempel is niet uniek genoeg.
+
 ## Openstaande besluiten
 
 Zie de kop "Nog te beslissen" onderaan de betreffende ADR. Op dit moment open:

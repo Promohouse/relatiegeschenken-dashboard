@@ -6,6 +6,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Stap 1b: staging- en connectortabellen met capability-routing per
+  leverancier, drukproeven met versies en goedkeuringshistorie, inkoop met
+  deelontvangsten, voorbereide inkoopfacturen met dubbelherkenning, en
+  kanalen met prijsregels, partnerfeeds en API-sleutels. Tweede migratie,
+  23 nieuwe tabellen (58 totaal). Seed uitgebreid met de koppelconfiguratie
+  van de vijf leveranciers, alle inactief. 76 tests.
+- `packages/contracts`: hash-vergelijking voor imports, API-sleutelhashing,
+  inkooplogica voor deelontvangsten.
+- `packages/db`: capability-routing en hash-controle voor connectoren.
 - Stap 1a: eigen databaserol en databases, veiligheidsslot op destructieve
   databasecommando's, Prisma-opzet en het kernschema (34 tabellen) met eerste
   migratie, seed met gemarkeerde demodata, en 24 tests.
