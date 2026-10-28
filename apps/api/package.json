@@ -6,7 +6,8 @@
     "dev": "dotenv -e ../../.env -- node --watch-path=./src -r @swc-node/register src/main.ts",
     "start": "dotenv -e ../../.env -- node -r @swc-node/register src/main.ts",
     "test": "node ../../scripts/prepare-test-db.mjs && vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "seed:accounts": "dotenv -e ../../.env -- node -r @swc-node/register scripts/seed-accounts.ts"
   },
   "dependencies": {
     "@nestjs/common": "12.3.2",

@@ -153,6 +153,7 @@ injector oplevert. Daarom:
 Validatie en OpenAPI komen uit Zod, niet uit class-validator. Zie ADR-0011.
 
 ```bash
+npm run db:seed        # basisgegevens, demodata en demo-accounts met wachtwoord
 npm run api:dev        # api met herstart bij wijzigingen, op poort 3101
 npm test               # alle workspaces
 npm run typecheck      # packages en api

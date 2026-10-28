@@ -38,7 +38,8 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | | Taak | Acceptatiecriterium |
 |---|---|---|
 | ◻ | Basislayout, zijbalk, inlogscherm | werkt op desktop, tablet en mobiel |
-| ◻ | Klantenoverzicht | zoeken, filteren, sorteren, pagineren op 10.000 rijen zonder merkbare vertraging |
+| ✅ | Klanten-API | zoeken op naam, nummer, e-mail, btw-nummer en contactpersoon; filteren, sorteren, pagineren; aanmaken met uitgegeven klantnummer; wijzigen met auditverschil; op inactief zetten in plaats van verwijderen |
+| ◻ | Klantenoverzicht (scherm) | zoeken, filteren, sorteren, pagineren op 10.000 rijen zonder merkbare vertraging |
 | ◻ | Klantdetail met tabbladen | gegevens, contactpersonen, adressen, afspraken, orders, documenten |
 | ◻ | Betalingsvoorwaarden en klantprijzen | een klantprijs gaat voor op de algemene prijsregel, aangetoond met een test |
 | ◻ | Gebruikersbeheer en rollen | rechten per module en actie instelbaar zonder code |

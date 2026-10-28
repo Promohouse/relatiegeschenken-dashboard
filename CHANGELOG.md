@@ -6,6 +6,12 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Klantenmodule in de api: zoeken, filteren, sorteren en pagineren, aanmaken
+  met een door het systeem uitgegeven klantnummer, wijzigen met auditverschil,
+  en op inactief zetten in plaats van verwijderen. Nederlandse btw-nummers
+  worden op vorm gecontroleerd, buitenlandse niet. 222 tests.
+- Demo-accounts met wachtwoord (`npm run db:seed`), zodat er op DEV ingelogd
+  kan worden.
 - Authenticatie met better-auth 1.7.14 (ADR-0012): registreren, inloggen,
   sessiecookie en de tweefactor-plugin, op onze eigen users-tabel in plaats
   van een tweede gebruikersadministratie.
