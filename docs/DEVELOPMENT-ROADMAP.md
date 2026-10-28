@@ -37,7 +37,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 
 | | Taak | Acceptatiecriterium |
 |---|---|---|
-| ✅ | End-to-end-tests op inloggen en klanten | 24 Playwright-tests in een echte browser: inloggen, verkeerd wachtwoord, doorsturen en terugkeren, zoeken, filteren, sorteren, uitloggen, en klanten aanmaken, wijzigen en deactiveren |
+| ✅ | End-to-end-tests op inloggen, klanten en gebruikers | 31 Playwright-tests in een echte browser: inloggen, verkeerd wachtwoord, doorsturen en terugkeren, zoeken, filteren, sorteren, uitloggen, en klanten aanmaken, wijzigen en deactiveren |
 | ✅ | Basislayout, zijbalk, inlogscherm | gereed: vaste zijbalk die onderscheid maakt tussen gebouwd en in aanbouw, inlogscherm, demowaarschuwing, uitloggen |
 | ✅ | Klanten-API | zoeken op naam, nummer, e-mail, btw-nummer en contactpersoon; filteren, sorteren, pagineren; aanmaken met uitgegeven klantnummer; wijzigen met auditverschil; op inactief zetten in plaats van verwijderen |
 | ✅ | Klantenoverzicht (scherm) | gereed: zoeken, filteren op actief, sorteren per kolom, pagineren. Werkt zonder JavaScript, want het zijn gewone links en een formulier |
@@ -46,7 +46,8 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | Adressen beheren | toevoegen, wijzigen, verwijderen als het adres nergens gebruikt wordt; één standaardadres per soort; Nederlandse postcodes genormaliseerd |
 | ✅ | Klanten aanmaken en wijzigen | formulier met foutmeldingen bij het veld zelf, op inactief zetten met bevestiging, knoppen alleen zichtbaar met het juiste recht |
 | ◻ | Betalingsvoorwaarden en klantprijzen | een klantprijs gaat voor op de algemene prijsregel, aangetoond met een test |
-| ◻ | Gebruikersbeheer en rollen | rechten per module en actie instelbaar zonder code |
+| ✅ | Gebruikersbeheer | aanmaken met beginwachtwoord en rollen, wijzigen, op inactief zetten; zelfregistratie geblokkeerd; niemand kan zichzelf of iedereen buitensluiten |
+| ◻ | Rollen bewerken | rechten per module en actie aanpasbaar in het scherm; de gegevens staan er al, het scherm nog niet |
 | ◻ | Klantgebruikers met klantrollen | alleen een goedkeurder kan goedkeuren; test op de andere rollen |
 
 ## Fase 2 — Productbeheer

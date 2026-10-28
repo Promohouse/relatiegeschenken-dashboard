@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import request from 'supertest'
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
+import { maakGebruikerMetWachtwoord } from './helpers'
 
 loadEnv({ path: resolve(__dirname, '../../../.env') })
 process.env.NODE_ENV = 'test'
@@ -35,10 +36,9 @@ describe('klanten', () => {
   }
 
   async function maakGebruiker(email: string, roleId: string) {
-    await request(app.getHttpServer())
-      .post('/api/auth/sign-up/email')
-      .send({ email, password: wachtwoord, name: 'Testgebruiker' })
-    const user = await prisma.unscoped.user.findUniqueOrThrow({ where: { email } })
+    const user = await maakGebruikerMetWachtwoord(app, {
+      email, name: 'Testgebruiker', password: wachtwoord,
+    })
     await prisma.unscoped.userRole.create({ data: { userId: user.id, roleId } })
     opgeruimd.push(user.id)
     return user.id

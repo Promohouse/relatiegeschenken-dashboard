@@ -6,6 +6,14 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Gebruikersbeheer: aanmaken met een beginwachtwoord en rollen, wijzigen, op
+  inactief zetten, en een overzicht van de rollen met hun aantal rechten.
+- **Zelfregistratie geblokkeerd.** De registratieroute van better-auth stond
+  open: een willekeurige buitenstaander kon een account aanmaken en inloggen.
+  Rechten kreeg hij niet, maar op een intern systeem hoort die route dicht.
+- Twee uitsluitbeveiligingen: je kunt jezelf niet op inactief zetten, en een
+  wijziging waarna niemand meer gebruikers kan beheren wordt teruggerold.
+  248 tests.
 - Contactpersonen en adressen beheren vanuit het scherm. Hoogstens één
   hoofdcontact per klant en één standaardadres per soort, allebei door de
   service geregeld in plaats van door het formulier. Nederlandse postcodes

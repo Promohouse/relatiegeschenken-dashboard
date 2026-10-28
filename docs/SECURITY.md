@@ -5,6 +5,16 @@ interface verbergt alleen; de guard beslist.
 
 ## 1. Authenticatie
 
+**Zelfregistratie staat uit.** better-auth publiceert een registratieroute;
+die is geblokkeerd vóór zijn handler. Dit is een intern systeem: accounts
+ontstaan alleen doordat iemand met het recht `users:create` ze aanmaakt. De
+gebruikersmodule roept dezelfde functie rechtstreeks aan en gaat dus niet
+langs die afsluiting.
+
+**Niemand kan het systeem op slot zetten.** Je kunt jezelf niet op inactief
+zetten, en een wijziging waarna geen enkele actieve gebruiker meer het recht
+`users:update` heeft wordt geweigerd en teruggerold.
+
 **Medewerkers** — e-mail en wachtwoord met verplichte MFA (TOTP). Sessies in
 een httpOnly-cookie, `Secure`, `SameSite=Lax`, met een vaste levensduur en
 intrekbaarheid per sessie. Wachtwoordhashing met een echte wachtwoordfunctie

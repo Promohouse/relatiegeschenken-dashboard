@@ -20,6 +20,27 @@ export function configureApp(app: INestApplication, options: { openApi?: boolean
   const auth = app.get<Auth>(AUTH)
 
   const expressApp = app.getHttpAdapter().getInstance() as express.Express
+
+  /**
+   * Zelfregistratie staat uit. better-auth publiceert een registratieroute,
+   * maar dit is een intern systeem: accounts worden door een beheerder
+   * aangemaakt. De route wordt hier geblokkeerd, vóór de handler van
+   * better-auth. Onze eigen gebruikersmodule roept dezelfde functie
+   * rechtstreeks aan en gaat dus niet langs deze afsluiting.
+   */
+  const weigerRegistratie = (_req: express.Request, res: express.Response) => {
+    res.status(403).json({
+      error: {
+        code: 'GEEN_RECHTEN',
+        message:
+          'Accounts worden door een beheerder aangemaakt. Vraag iemand met het recht ' +
+          'users:create om je toe te voegen.',
+      },
+    })
+  }
+  expressApp.all('/api/auth/sign-up', weigerRegistratie)
+  expressApp.all('/api/auth/sign-up/*splat', weigerRegistratie)
+
   expressApp.all('/api/auth/*splat', toNodeHandler(auth))
 
   // Pas hierna body parsing, voor onze eigen routes.

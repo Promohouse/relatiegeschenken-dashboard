@@ -179,6 +179,11 @@ Twee dingen bij het schrijven van e2e-tests:
 - Een test die gegevens aanmaakt ruimt ze achteraf zelf op, rechtstreeks via
   `@rgh/db` en op een eigen voorvoegsel. Er is bewust geen verwijder-endpoint:
   klanten horen niet verwijderd te worden, dus kan de applicatie dat niet.
+- **Stop een draaiende api voordat je e2e-tests draait als je de api hebt
+  gewijzigd.** Playwright hergebruikt een server die al op de poort luistert,
+  en dan test je de oude code. De fout ziet eruit als een ontbrekende route.
+- Wacht na het inloggen expliciet op het dashboard voordat je verder
+  navigeert, anders racet de navigatie tegen het doorsturen.
 - Wacht expliciet op de doelpagina voordat je op een knop klikt waarvan de
   tekst ook op de vorige pagina voorkomt. "Op inactief zetten" staat zowel op
   de klant als op een contactpersoon; zonder die wachtstap klikte de test de

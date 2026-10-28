@@ -1,6 +1,6 @@
 import {
   Building2, ClipboardList, FileText, Folder, LayoutDashboard, Package,
-  Truck, CheckSquare, Settings,
+  Truck, CheckSquare, Settings, Users,
 } from 'lucide-react'
 import { NavLink } from './nav-link'
 import { LogoutButton } from './logout-button'
@@ -14,6 +14,7 @@ import type { CurrentUser } from '@/lib/session'
 const GEBOUWD = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, permissie: null },
   { href: '/klanten', label: 'Klanten', icon: Building2, permissie: 'customers:view' },
+  { href: '/beheer/gebruikers', label: 'Gebruikers', icon: Users, permissie: 'users:view' },
 ]
 
 const NOG_NIET = [

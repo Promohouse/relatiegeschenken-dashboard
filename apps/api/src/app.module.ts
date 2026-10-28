@@ -7,6 +7,7 @@ import { PrismaModule } from './core/prisma/prisma.module'
 import { CustomersModule } from './modules/customers/customers.module'
 import { HealthModule } from './modules/health/health.module'
 import { MeModule } from './modules/me/me.module'
+import { UsersModule } from './modules/users/users.module'
 
 /**
  * Domeinmodules komen hier één voor één bij. Regel uit CLAUDE.md: een module
@@ -14,7 +15,7 @@ import { MeModule } from './modules/me/me.module'
  * geexporteerde service.
  */
 @Module({
-  imports: [AppConfigModule, PrismaModule, AuthModule, CoreModule, HealthModule, MeModule, CustomersModule],
+  imports: [AppConfigModule, PrismaModule, AuthModule, CoreModule, HealthModule, MeModule, CustomersModule, UsersModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -13,6 +13,7 @@ const { AppModule } = await import('../src/app.module')
 const { configureApp } = await import('../src/configure-app')
 const { Public, RequirePermission } = await import('../src/core/auth/auth.decorators')
 const { PrismaService } = await import('../src/core/prisma/prisma.service')
+import { maakGebruikerMetWachtwoord } from './helpers'
 
 @Controller('test-beveiligd')
 class BeveiligdController {
@@ -85,15 +86,26 @@ describe('authenticatie en rechten', () => {
     await app?.close()
   })
 
-  it('maakt bij registreren een gebruiker in onze eigen users-tabel', async () => {
+  it('weigert zelfregistratie: accounts komen van een beheerder', async () => {
+    // Dit is een intern systeem. better-auth publiceert een registratieroute,
+    // en die hoort hier dicht te staan.
     const res = await request(app.getHttpServer())
       .post('/api/auth/sign-up/email')
-      .send({ email, password: wachtwoord, name: 'Testmedewerker' })
+      .send({ email: 'indringer@buiten.local', password: 'zomaar-een-wachtwoord', name: 'Indringer' })
+      .expect(403)
 
-    expect([200, 201]).toContain(res.status)
+    expect(res.body.error.message).toContain('beheerder')
+    expect(
+      await prisma.unscoped.user.count({ where: { email: 'indringer@buiten.local' } }),
+    ).toBe(0)
+  })
 
-    const user = await prisma.unscoped.user.findUniqueOrThrow({ where: { email } })
+  it('zet een door een beheerder aangemaakte gebruiker in onze eigen users-tabel', async () => {
+    const user = await maakGebruikerMetWachtwoord(app, {
+      email, name: 'Testmedewerker', password: wachtwoord,
+    })
     userId = user.id
+
     expect(user.name).toBe('Testmedewerker')
     // Eén gebruikerstabel: geen tweede administratie om synchroon te houden.
     expect(user.id).toMatch(/^[0-9a-f-]{36}$/)
