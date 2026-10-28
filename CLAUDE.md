@@ -83,6 +83,10 @@ Geen koppeling met Teamleader of SnelStart in deze fase.
 - `max_connections` is 100 voor alle projecten samen. Houd de connection pool
   klein (richtlijn: 10 voor de api, 5 voor jobs).
 - Poort 3000 is bezet door een ander project. Web = 3100, api = 3101.
+- **Valkey** draait via Homebrew op poort 6379 en kan ook gedeeld worden.
+  Gebruik uitsluitend `VALKEY_DB` uit `.env` (3 voor dev, 4 voor tests) en de
+  keyprefix `rgh:`. Nooit `FLUSHALL`, en `FLUSHDB` alleen na controle van het
+  databasenummer. Zie ADR-0009.
 - Geen Docker op deze machine. Compose-bestanden staan in `docker/` en worden
   pas getest zodra Docker beschikbaar is.
 

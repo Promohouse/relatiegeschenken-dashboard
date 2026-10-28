@@ -16,6 +16,7 @@ nieuwe die de oude vervangt.
 | [0006](architecture/0006-prisma-7-en-versievastzetting.md) | Prisma vastgezet op 7.10.0 | blijft staan |
 | [0007](architecture/0007-offertemodel-splitsen.md) | Offertes als eigen aggregaat met onveranderlijke versies | besloten 2026-10-28 |
 | [0008](architecture/0008-nestjs-als-backendframework.md) | NestJS blijft de backend | besloten 2026-10-28 |
+| [0009](architecture/0009-achtergrondtaken-bullmq-valkey.md) | BullMQ op Valkey; outbox blijft in PostgreSQL | besloten 2026-10-28, vervangt pg-boss |
 
 ## 2. Wat de masterprompt verandert
 
@@ -67,7 +68,10 @@ dit expliciet bevestigd hebben. Alternatief: Next.js route handlers met een
 eigen servicelaag; dat werkt, maar modulegrenzen en autorisatie zijn dan
 discipline in plaats van structuur.
 
-### D-03 — Achtergrondtaken: Redis en BullMQ, of pg-boss *(advies: BullMQ, vraag over kosten beantwoord)*
+### D-03 — Achtergrondtaken — **BESLOTEN 2026-10-28: BullMQ op Valkey**
+
+Vastgelegd in [ADR-0009](architecture/0009-achtergrondtaken-bullmq-valkey.md).
+Valkey 9.1.3 staat lokaal en draait.
 
 **Licenties en kosten, nagekeken op 2026-10-28:**
 
