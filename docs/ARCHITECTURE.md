@@ -75,7 +75,8 @@ Vastgelegd, met de reden erbij:
 | Onderdeel | Keuze | Toelichting |
 |---|---|---|
 | Taal | TypeScript | overal, ook in scripts |
-| Frontend | Next.js (App Router), React, Tailwind, shadcn/ui | serverrendering voor lijsten, cliëntinteractie waar nodig |
+| Frontend | Next.js 16, React 19, Tailwind 4 | serverrendering voor lijsten; cliëntcode alleen waar het echt moet |
+| UI-componenten | in shadcn/ui-stijl, handgeschreven | dezelfde opzet (`cn()`, varianten via `class-variance-authority`) zonder de CLI en zonder Radix, tot een component het echt nodig heeft |
 | Backend | NestJS | modules, dependency injection, guards, interceptors en OpenAPI-generatie uit één bron. **Niet genoemd in de opdracht; zie DECISIONS.md D-02.** |
 | Database | PostgreSQL 16, Prisma 7.10.0 | versie vastgezet, zie ADR-0006 |
 | Validatie | Zod, in `packages/contracts` | één schema voor front- en backend |

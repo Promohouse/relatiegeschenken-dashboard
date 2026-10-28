@@ -25,6 +25,7 @@ import { PermissionsGuard } from './permissions.guard'
           secret: config.env.AUTH_SECRET,
           baseURL: config.env.API_BASE_URL,
           issuer: config.env.MFA_ISSUER,
+          trustedOrigins: [config.env.WEB_BASE_URL],
         }),
     },
     AuthService,

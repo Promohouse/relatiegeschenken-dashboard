@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/**
+ * Rustig en zakelijk, zoals de opdracht vraagt. Neutralen met een lichte
+ * groenzweem naar het accent toe, zodat het geen standaard grijs is.
+ */
+@theme {
+  --color-ground: #f4f6f3;
+  --color-surface: #ffffff;
+  --color-sunk: #eceee9;
+  --color-ink: #171a18;
+  --color-ink-soft: #4d5752;
+  --color-ink-faint: #7c8781;
+  --color-rule: #dde1db;
+  --color-rule-strong: #c3cac3;
+  --color-accent: #2f6b4f;
+  --color-accent-soft: #e4efe8;
+
+  --color-ok: #2f6b4f;
+  --color-ok-bg: #e4efe8;
+  --color-wait: #8a5f17;
+  --color-wait-bg: #f6ecd8;
+  --color-rest: #6d7a74;
+  --color-rest-bg: #e8ebe7;
+  --color-alarm: #9b3a2f;
+  --color-alarm-bg: #f7e4e1;
+}
+
+html,
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+}
+
+/* Cijfers in kolommen moeten uitlijnen. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core'
 import type { Request } from 'express'
 import { ForbiddenError, UnauthorizedError } from '../errors/domain-errors'
 import { AuthService } from './auth.service'
-import { PERMISSIONS_KEY, PUBLIC_KEY } from './auth.decorators'
+import { LOGIN_ONLY_KEY, PERMISSIONS_KEY, PUBLIC_KEY } from './auth.decorators'
 
 /**
  * Rechten worden op de backend gecontroleerd (harde regel 4). De frontend
@@ -25,6 +25,9 @@ export class PermissionsGuard implements CanActivate {
 
     const doelen = [context.getHandler(), context.getClass()]
     if (this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, doelen)) return true
+
+    // Ingelogd zijn is genoeg: de sessie-guard heeft dat al vastgesteld.
+    if (this.reflector.getAllAndOverride<boolean>(LOGIN_ONLY_KEY, doelen)) return true
 
     const vereist = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, doelen)
     if (!vereist || vereist.length === 0) {

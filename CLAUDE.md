@@ -155,6 +155,7 @@ Validatie en OpenAPI komen uit Zod, niet uit class-validator. Zie ADR-0011.
 ```bash
 npm run db:seed        # basisgegevens, demodata en demo-accounts met wachtwoord
 npm run api:dev        # api met herstart bij wijzigingen, op poort 3101
+npm run web:dev        # dashboard op poort 3100 (heeft de api nodig)
 npm test               # alle workspaces
 npm run typecheck      # packages en api
 ```

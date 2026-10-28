@@ -6,6 +6,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Dashboard-applicatie (`apps/web`): inlogscherm, vaste zijbalk die gebouwde
+  en nog niet gebouwde modules uit elkaar houdt, klantenoverzicht met zoeken,
+  filteren, sorteren en pagineren, en een klantdetailpagina met
+  contactpersonen en adressen. Draait op poort 3100 en zet /api door naar de
+  api, zodat de sessiecookie op één domein blijft.
+- `/api/me` geeft de ingelogde gebruiker met zijn rechten, zodat de interface
+  alleen toont wat die persoon mag.
 - Klantenmodule in de api: zoeken, filteren, sorteren en pagineren, aanmaken
   met een door het systeem uitgegeven klantnummer, wijzigen met auditverschil,
   en op inactief zetten in plaats van verwijderen. Nederlandse btw-nummers

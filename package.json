@@ -13,8 +13,9 @@
     "db:seed": "npm run seed -w @rgh/db && npm run seed:accounts -w @rgh/api",
     "db:studio": "npm run studio -w @rgh/db",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck -w @rgh/api",
-    "api:dev": "npm run dev -w @rgh/api"
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck -w @rgh/api && npm run typecheck -w @rgh/web",
+    "api:dev": "npm run dev -w @rgh/api",
+    "web:dev": "npm run dev -w @rgh/web"
   },
   "engines": {
     "node": ">=22"

@@ -12,12 +12,17 @@ import { createPrismaClient, type Db } from '@rgh/db'
  * als `module:actie` staan in onze eigen tabellen, want die zijn
  * domeinspecifiek en moeten configureerbaar zijn zonder code.
  */
-export function createAuth(db: Db, options: { secret: string; baseURL: string; issuer: string }) {
+export function createAuth(
+  db: Db,
+  options: { secret: string; baseURL: string; issuer: string; trustedOrigins?: string[] },
+) {
   return betterAuth({
     appName: 'Relatiegeschenken Hub',
     secret: options.secret,
     baseURL: options.baseURL,
     basePath: '/api/auth',
+    // Het dashboard draait op een eigen adres en zet de inlogverzoeken door.
+    trustedOrigins: options.trustedOrigins ?? [],
 
     database: prismaAdapter(db, { provider: 'postgresql' }),
 
