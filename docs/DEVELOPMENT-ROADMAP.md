@@ -55,7 +55,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | | Taak | Acceptatiecriterium |
 |---|---|---|
 | ◻ | `artwork_assets` | klantlogo's en ontwerpen, herbruikbaar bij herhaalorders |
-| ◻ | Productoverzicht en -detail | varianten, staffels, bedrukopties, media |
+| ✅ | Productoverzicht en -detail | gereed: zoeken op artikelnummer, naam, merk, variantnummer en leveranciersartikelnummer; filteren op status en leverancier; detail met varianten, inkoopstaffels en bedrukopties. Media volgt met de storage-adapter |
 | ◻ | Handmatige invoer | een product volledig aanmaken zonder import |
 | ◻ | **CSV/XLSX-import** met diff-review | proefimport toont wijzigingen vóór toepassen; ontbrekende producten worden gemarkeerd, **niet verwijderd** |
 | ✅ | Connectorlaag en midocean-koppeling | gereed: versleutelde credentials, connector-register, midocean REST (catalogus, prijzen, voorraad), proefimport die niets wegschrijft, verschillen in `staged_changes`, ontbrekende artikelen als voorstel tot inactief. Toepassen volgt |

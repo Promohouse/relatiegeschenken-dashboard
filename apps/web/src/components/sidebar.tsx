@@ -16,6 +16,7 @@ const GEBOUWD = [
   { href: '/klanten', label: 'Klanten', icon: Building2, permissie: 'customers:view' },
   { href: '/beheer/gebruikers', label: 'Gebruikers', icon: Users, permissie: 'users:view' },
   { href: '/beheer/rollen', label: 'Rollen', icon: ShieldCheck, permissie: 'users:view' },
+  { href: '/producten', label: 'Producten', icon: Package, permissie: 'products:view' },
   { href: '/imports', label: 'Imports', icon: Download, permissie: 'imports:view' },
   {
     href: '/beheer/betalingsvoorwaarden', label: 'Betalingsvoorwaarden',
@@ -26,7 +27,6 @@ const GEBOUWD = [
 const NOG_NIET = [
   { label: 'Offertes', icon: FileText },
   { label: 'Orders', icon: ClipboardList },
-  { label: 'Producten', icon: Package },
   { label: 'Leveranciers', icon: Truck },
   { label: 'Taken', icon: CheckSquare },
   { label: 'Documenten', icon: Folder },

@@ -831,7 +831,9 @@ async function seedConnections() {
         { capability: 'CATALOG', priority: 10, schedule: '0 2 * * *' },
         { capability: 'MEDIA', priority: 10, schedule: '30 2 * * *' },
         { capability: 'PRICE_TIERS', priority: 10, schedule: '0 2 * * *' },
-        { capability: 'INVENTORY', priority: 10, schedule: '0 * * * *' },
+        // Twee keer per dag is genoeg; de opdrachtgever hoeft geen
+        // voorraadstand per uur. midocean ververst zelf elk uur.
+        { capability: 'INVENTORY', priority: 10, schedule: '0 7,15 * * *' },
         // Gedocumenteerd en uit: bestellen gaat buiten het platform om
         // (harde regel 13). Zie ADR-0013 voor wat er nodig is om dit later
         // wel te bouwen.

@@ -6,6 +6,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **Productcatalogus in het scherm** (`/producten`). Zoeken op artikelnummer,
+  naam, merk, variantnummer en leveranciersartikelnummer; filteren op status en
+  leverancier; sorteren en pagineren. Het detail toont kenmerken, varianten met
+  kleurcode en EAN, de inkoopstaffels per leverancier en de bedrukopties.
+  Daarmee is zichtbaar wat een import binnenbrengt, in plaats van dat het in de
+  database blijft steken.
+- Een product zonder inkoopprijs wordt als zodanig gemarkeerd, in het overzicht
+  en op het detail, met de reden erbij: zonder prijs weigert de calculatie een
+  verkoopprijs te bepalen.
 - **Prijsimport**: inkoopprijzen en staffels uit `pricelist/2.0`, met dezelfde
   beoordelingsstap als de catalogus. In het scherm staan de oude en nieuwe
   staffel naast elkaar.
@@ -216,6 +225,8 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- Voorraad van midocean wordt twee keer per dag opgehaald in plaats van elk
+  uur: een voorraadstand per uur is voor dit werk niet nodig.
 - **Een fout van een leverancier geeft 502 in plaats van 500.** Bij de eerste
   echte poging met een midocean-sleutel verdween onze zorgvuldig geschreven
   uitleg achter "er is een onverwachte fout opgetreden". Een leverancier die
