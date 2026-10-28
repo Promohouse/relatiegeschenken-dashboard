@@ -1,7 +1,8 @@
 # DATABASE — Relatiegeschenken Hub
 
 PostgreSQL 16, Prisma 7.10.0. UUID-sleutels, leesbare nummers voor klanten,
-offertes, orders en inkooporders. Stand: 63 tabellen, vijf migraties.
+offertes, orders, zendingen en inkooporders. Stand: 67 tabellen, zeven
+migraties.
 
 ## 1. Invarianten
 
@@ -68,10 +69,20 @@ Te bouwen: `payment_terms` (betalingsvoorwaarden per klant),
 `product_print_options`, `print_price_tiers`, `media_assets`,
 `product_media`, `product_field_sources` — gereed.
 
-Te bouwen: `print_positions` als eigen entiteit (nu een tekstveld op
-`product_print_options`; de opdracht vraagt meerdere bedrukposities per
-orderregel, dus dit moet een echte entiteit worden), `artwork_assets`
-(klantlogo's en ontwerpen, herbruikbaar bij herhaalorders).
+`print_positions` — **gereed**. Meerdere bedrukkingen per orderregel konden al
+via meerdere print jobs; wat ontbrak was de positie als genormaliseerde
+entiteit, nodig om leveranciersbenamingen te mappen
+(`MappingDomain.PRINT_POSITION`) en om op positie te filteren en te
+rapporteren. `product_print_options` verwijst er verplicht naar en bewaart in
+`positionLabel` de oorspronkelijke tekst van de leverancier.
+
+Bedrukkingen op orderregels en offerteregels houden hun positietekst als
+momentopname en verwijzen daarnaast naar de positie. Historische, vastgezette
+offerteversies zijn met opzet **niet** aangevuld bij de migratie: daar is de
+tekst het vastgelegde gegeven.
+
+Te bouwen: `artwork_assets` (klantlogo's en ontwerpen, herbruikbaar bij
+herhaalorders).
 
 ### Imports en leverancierskoppelingen
 `supplier_connections`, `supplier_connection_capabilities`, `import_runs`,
@@ -121,11 +132,20 @@ het moment van goedkeuring, en een onveranderbaarheidsvlag op het akkoord.
 `goods_receipts`, `goods_receipt_lines` — gereed.
 
 ### Uitgaande leveringen
-**Te bouwen.** `shipments`, `shipment_items`.
-Let op: `goods_receipts` is **inkomend** (wat de leverancier bij ons of bij de
-klant aflevert). Uitgaande zendingen naar de klant, met meerdere
-afleveradressen, deelzendingen, trackinginformatie en pakbonnen, zijn een
-apart domein dat nog niet bestaat.
+`shipments`, `shipment_items` — **gereed**. Meerdere zendingen per order, elk
+met eigen afleveradres, methode (rechtstreeks vanuit de leverancier of eigen
+verzending), vervoerder, trackingcode en pakbon.
+
+`goods_receipts` is **inkomend**: wat de leverancier bij ons of bij de klant
+aflevert. Die twee niet door elkaar halen. Daarom is ook `LogisticsStatus`
+uitgaand gemaakt: `NONE`, `EXPECTED`, `PREPARED`, `SHIPPED`,
+`PARTIALLY_DELIVERED`, `DELIVERED`. De inkomende begrippen zitten in
+`PurchaseStatus`.
+
+De statussen zijn **afgeleid**, niet handmatig gezet: `deriveLineLogisticsStatus`
+en `isOrderFullyDelivered` in `packages/contracts/src/shipping.ts` bepalen ze
+uit de zendingen. Een order is pas volledig geleverd als elke relevante regel
+volledig geleverd is; geannuleerde regels houden een order niet open.
 
 ### Documenten
 `documents`, `document_versions` — gereed, met koppelingen naar klant, order,
@@ -164,10 +184,16 @@ werkelijke brutowinst en -marge, plus een margestatus
 ### Systeem
 `audit_logs`, `number_sequences`, `vat_rates`, `settings` — gereed.
 
-Te bouwen: `external_references` (herkomst uit Teamleader, SnelStart, Mollie,
-Graph en leverancierssystemen, met type, extern id en interne verwijzing).
-Dit is nodig voor de migratie én voor idempotente synchronisatie, en moet er
-zijn vóór de eerste externe koppeling.
+`external_references` — **gereed**. Herkomst en synchronisatiesleutel richting
+Teamleader, SnelStart, Mollie, Graph en leverancierssystemen. Twee unieke
+sleutels: één extern record wijst naar maximaal één intern record per systeem,
+en omgekeerd. Daarmee is synchronisatie idempotent: een mislukte poging levert
+bij de tweede keer geen duplicaat.
+
+**Bewuste afweging:** polymorf met `entityType` plus `entityId`, dus zonder
+foreign key. Het alternatief was vijftien nullable kolommen die bij elke
+nieuwe entiteit weer groeien. De prijs is dat verwijsrijen kunnen achterblijven
+als hun doel verdwijnt; dat vraagt een opruimtaak, die nog niet bestaat.
 
 ### Kanalen en partners
 `shop_channels`, `channel_assortment_items`, `price_rules`, `feed_exports`,

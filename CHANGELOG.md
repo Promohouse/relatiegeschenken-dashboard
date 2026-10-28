@@ -6,6 +6,16 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Uitgaande zendingen (`shipments`, `shipment_items`) met deelleveringen,
+  meerdere afleveradressen, tracking en pakbonnen. LogisticsStatus is uitgaand
+  gemaakt; de statussen worden afgeleid uit de zendingen en een deellevering
+  leidt nooit tot afronding. 122 tests.
+- `external_references` voor herkomst en idempotente synchronisatie met
+  Teamleader, SnelStart, Mollie en Graph.
+- `print_positions` als genormaliseerde entiteit, met de oorspronkelijke
+  leveranciersbenaming bewaard en vastgezette offerteversies ongemoeid.
+- ADR-0010: deployment op Decorsign K3s via ArgoCD, met de risico's rond de
+  gedeelde PostgreSQL en de ontbrekende back-upstrategie vastgelegd.
 - Offertes als eigen aggregaat (ADR-0007): quotes, quote_versions,
   quote_items, quote_item_print_jobs en quote_approvals, met vier
   databasetriggers die onveranderlijkheid afdwingen en een expliciet

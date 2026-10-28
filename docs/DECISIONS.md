@@ -19,6 +19,19 @@ nieuwe die de oude vervangt.
 | [0009](architecture/0009-achtergrondtaken-bullmq-valkey.md) | BullMQ op Valkey; outbox blijft in PostgreSQL | besloten 2026-10-28, vervangt pg-boss |
 | [0010](architecture/0010-deployment-decorsign-k3s-argocd.md) | Deployment op Decorsign K3s via ArgoCD, GitOps, twee namespaces | besloten 2026-10-28; drie punten bij Decorsign open |
 
+## 1b. Bevestigd op 2026-10-28
+
+- **De masterprompt vervangt de opdracht van 8 oktober.** SnelStart, Mollie en
+  Microsoft 365 zijn daarmee in scope, waar de oude opdracht externe
+  koppelingen uitsloot.
+- **Bedrijfskleding valt buiten scope.** Geen maattabellen of bestellen per
+  maat in het productmodel.
+- **Partnerprogramma's**: de masterprompt noemt ze niet meer, alleen een
+  toekomstige webshop-API. Aanname: de eis uit 8 oktober is vervallen. De
+  tabellen `shop_channels`, `partner_accounts`, `feed_exports` en `api_keys`
+  blijven staan als voorbereiding voor die API en voor eventuele
+  wederverkopers. Correctie welkom als dit anders bedoeld is.
+
 ## 2. Wat de masterprompt verandert
 
 Niet alles is nieuw; dit is wat afwijkt van de opdracht van 8 oktober.

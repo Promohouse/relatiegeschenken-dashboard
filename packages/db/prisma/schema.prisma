@@ -79,12 +79,15 @@ enum PurchaseStatus {
   READY
 }
 
+/// Logistieke status van een orderregel: uitgaand, richting de klant.
+/// Inkomende ontvangsten van leveranciers staan in goods_receipts en in
+/// PurchaseStatus; die twee niet door elkaar halen.
 enum LogisticsStatus {
   NONE
   EXPECTED
-  PARTIALLY_RECEIVED
-  RECEIVED
+  PREPARED
   SHIPPED
+  PARTIALLY_DELIVERED
   DELIVERED
 }
 
@@ -369,6 +372,8 @@ model Address {
   invoiceQuotes  Quote[] @relation("QuoteInvoiceAddress")
   deliveryQuotes Quote[] @relation("QuoteDeliveryAddress")
 
+  shipments Shipment[] @relation("ShipmentDeliveryAddress")
+
   @@index([customerId, type])
   @@map("addresses")
 }
@@ -419,6 +424,8 @@ model Supplier {
   priceRules       PriceRule[]
 
   quoteItems QuoteItem[]
+
+  shipments Shipment[]
 
   @@map("suppliers")
 }
@@ -621,13 +628,17 @@ model ProductPrintOption {
   product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   printMethod   PrintMethod @relation(fields: [printMethodId], references: [id], onDelete: Restrict)
 
-  /// Bedrukkingspositie, bijvoorbeeld "voorzijde" of "deksel".
-  position  String?
-  maxColors Int     @default(1)
+  printPositionId String        @db.Uuid
+  printPosition   PrintPosition @relation(fields: [printPositionId], references: [id], onDelete: Restrict)
+
+  /// De benaming zoals de leverancier die aanlevert. De genormaliseerde
+  /// positie staat in printPosition; dit veld bewaart het origineel.
+  positionLabel String?
+  maxColors     Int     @default(1)
   /// Maximale bedrukkingsafmeting, vrije tekst zoals leveranciers die geven.
-  printArea String?
+  printArea     String?
   /// Instelkosten per order, los van de stuksprijs.
-  setupCost Decimal @default(0) @db.Decimal(14, 4)
+  setupCost     Decimal @default(0) @db.Decimal(14, 4)
 
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -635,7 +646,8 @@ model ProductPrintOption {
 
   priceTiers PrintPriceTier[]
 
-  @@unique([productId, printMethodId, position])
+  @@unique([productId, printMethodId, printPositionId])
+  @@index([printPositionId])
   @@map("product_print_options")
 }
 
@@ -892,6 +904,11 @@ model QuoteItemPrintJob {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Genormaliseerde positie. Niet aangevuld voor historische, vastgezette
+  /// offerteversies: daar is de tekst in `position` het vastgelegde gegeven.
+  printPositionId String?        @db.Uuid
+  printPosition   PrintPosition? @relation(fields: [printPositionId], references: [id], onDelete: SetNull)
+
   @@index([quoteItemId])
   @@map("quote_item_print_jobs")
 }
@@ -990,6 +1007,8 @@ model Order {
   documents Document[]
   tasks     Task[]
 
+  shipments Shipment[]
+
   @@index([customerId])
   @@index([status])
   @@index([ownerId])
@@ -1060,6 +1079,8 @@ model OrderLine {
   proofs             Proof[]
   purchaseOrderLines PurchaseOrderLine[]
 
+  shipmentItems ShipmentItem[]
+
   @@unique([orderId, lineNumber])
   @@index([orderId])
   @@index([supplierId])
@@ -1089,6 +1110,10 @@ model OrderLinePrintJob {
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// Genormaliseerde positie. `position` blijft de momentopname van de tekst.
+  printPositionId String?        @db.Uuid
+  printPosition   PrintPosition? @relation(fields: [printPositionId], references: [id], onDelete: SetNull)
 
   @@index([orderLineId])
   @@map("order_line_print_jobs")
@@ -1136,6 +1161,8 @@ model Document {
   orderLineId String?    @db.Uuid
   orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
 
+  shipmentId        String?          @db.Uuid
+  shipment          Shipment?        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   quoteId           String?          @db.Uuid
   quote             Quote?           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   quoteVersionId    String?          @db.Uuid
@@ -1161,6 +1188,7 @@ model Document {
   @@index([category])
   @@index([quoteId])
   @@index([quoteVersionId])
+  @@index([shipmentId])
   @@index([proofId])
   @@index([purchaseOrderId])
   @@index([purchaseInvoiceId])
@@ -1483,8 +1511,36 @@ enum MappingDomain {
   COLOR
   SIZE
   PRINT_METHOD
+  PRINT_POSITION
   UNIT
   CURRENCY
+}
+
+/// Externe systemen waarmee herkomst en synchronisatie worden bijgehouden.
+enum ExternalSystem {
+  TEAMLEADER
+  SNELSTART
+  MOLLIE
+  MICROSOFT_GRAPH
+  SUPPLIER
+  PROMOHOUSE
+  OTHER
+}
+
+enum ShipmentMethod {
+  /// Leverancier levert rechtstreeks bij de klant af.
+  SUPPLIER_DIRECT
+  /// Wij verzenden zelf, eventueel na ontvangst in eigen huis.
+  OWN_SHIPMENT
+}
+
+enum ShipmentStatus {
+  DRAFT
+  READY
+  SHIPPED
+  DELIVERED
+  FAILED
+  CANCELLED
 }
 
 /// Waardemapping: "navy", "NY" en "donkerblauw" naar één eigen waarde.
@@ -1983,4 +2039,145 @@ model ApiKey {
 
   @@index([partnerAccountId])
   @@map("api_keys")
+}
+
+// ===========================================================================
+// Taak 2: herkomst, uitgaande leveringen en bedrukposities
+// ===========================================================================
+
+/// Genormaliseerde bedrukpositie. Meerdere bedrukkingen per orderregel konden
+/// al via meerdere print jobs; wat ontbrak was de positie als entiteit, nodig
+/// om leveranciersbenamingen te mappen (MappingDomain.PRINT_POSITION) en om
+/// op positie te kunnen filteren en rapporteren.
+model PrintPosition {
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
+  name        String
+  description String?
+  sort        Int     @default(0)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productOptions     ProductPrintOption[]
+  orderLinePrintJobs OrderLinePrintJob[]
+  quoteItemPrintJobs QuoteItemPrintJob[]
+
+  @@map("print_positions")
+}
+
+/// Herkomst en synchronisatiesleutel richting externe systemen.
+///
+/// Nodig voor twee dingen tegelijk: de Teamleader-migratie moet herleidbaar
+/// zijn, en elke synchronisatie met SnelStart, Mollie of Graph moet idempotent
+/// zijn. Zonder deze tabel levert een mislukte synchronisatie bij de tweede
+/// poging een duplicaat.
+///
+/// Bewust polymorf: `entityType` plus `entityId` in plaats van een kolom per
+/// entiteit. Dat kost referentiële integriteit - er is geen foreign key - maar
+/// het alternatief is vijftien nullable kolommen die bij elke nieuwe entiteit
+/// weer groeien. De prijs is een opruimtaak voor verwijsrijen zonder doel;
+/// dat staat als aandachtspunt in docs/DATABASE.md.
+model ExternalReference {
+  id     String         @id @default(uuid()) @db.Uuid
+  system ExternalSystem
+
+  /// Naam van het interne model, bijvoorbeeld "Customer" of "PurchaseInvoice".
+  entityType String
+  entityId   String @db.Uuid
+
+  /// Identificatie bij het externe systeem.
+  externalId     String
+  /// Leesbaar kenmerk, bijvoorbeeld een SnelStart-factuurnummer.
+  externalNumber String?
+
+  /// Laatst bekende externe toestand, voor onderzoek bij verschillen.
+  payload      Json?
+  lastSyncedAt DateTime?
+  lastError    String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Eén extern record wijst naar maximaal één intern record per systeem.
+  @@unique([system, entityType, externalId])
+  /// En omgekeerd: geen twee externe identificaties voor hetzelfde interne
+  /// record binnen één systeem.
+  @@unique([system, entityType, entityId])
+  @@index([entityType, entityId])
+  @@map("external_references")
+}
+
+/// Uitgaande zending naar de klant.
+///
+/// Niet te verwarren met `goods_receipts`, dat inkomend is: wat de leverancier
+/// bij ons of bij de klant aflevert. Een order kan meerdere zendingen hebben,
+/// naar verschillende adressen, op verschillende momenten.
+model Shipment {
+  id      String @id @default(uuid()) @db.Uuid
+  number  String @unique
+  orderId String @db.Uuid
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  deliveryAddressId String?  @db.Uuid
+  deliveryAddress   Address? @relation("ShipmentDeliveryAddress", fields: [deliveryAddressId], references: [id], onDelete: SetNull)
+
+  method ShipmentMethod @default(OWN_SHIPMENT)
+  status ShipmentStatus @default(DRAFT)
+
+  /// Gevuld bij een rechtstreekse levering vanuit de leverancier.
+  supplierId String?   @db.Uuid
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  carrier      String?
+  trackingCode String?
+  trackingUrl  String?
+
+  plannedShipDate      DateTime?
+  shippedAt            DateTime?
+  expectedDeliveryDate DateTime?
+  deliveredAt          DateTime?
+
+  recipientName String?
+  notes         String?
+
+  /// Teller voor optimistic locking.
+  version Int @default(0)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     ShipmentItem[]
+  documents Document[]
+
+  @@index([orderId])
+  @@index([status])
+  @@index([trackingCode])
+  @@map("shipments")
+}
+
+/// Wat er in een zending zit, per orderregel. Meerdere zendingen kunnen
+/// dezelfde orderregel deels bevatten; de som bepaalt of de regel volledig
+/// geleverd is.
+model ShipmentItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  shipmentId  String    @db.Uuid
+  shipment    Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderLineId String    @db.Uuid
+  orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+
+  quantity Int
+  notes    String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  /// Eén regel komt per zending maximaal één keer voor; een tweede partij van
+  /// dezelfde regel is een tweede zending.
+  @@unique([shipmentId, orderLineId])
+  @@index([orderLineId])
+  @@map("shipment_items")
 }

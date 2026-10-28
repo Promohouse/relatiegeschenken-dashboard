@@ -19,7 +19,9 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | Kernschema, migraties, seed, 76 tests | `npm test` groen |
 | ✅ | Projectdocumenten | dit document en de zeven andere |
 | ✅ | **Offertemodel splitsen** (D-01) | gereed: vijf tabellen, vier triggers, 18 tests die aantonen dat een vastgezette versie niet te wijzigen is en dat één akkoord nooit twee orders oplevert |
-| ◻ | `external_references` toevoegen | elke externe koppeling kan herkomst vastleggen; test op idempotente upsert |
+| ✅ | `external_references` toevoegen | gereed: twee unieke sleutels, idempotente upsert, 7 tests |
+| ✅ | `shipments` en `shipment_items` | gereed: deelzendingen, meerdere adressen, tracking, pakbon; afleidlogica in contracts; 8 tests plus 13 op de logica |
+| ✅ | `print_positions` als entiteit | gereed: verplichte verwijzing vanuit bedrukopties, oorspronkelijke leveranciersbenaming bewaard, vastgezette offerteversies ongemoeid |
 | ◻ | API-fundament NestJS | configuratie, foutafhandeling, auditlog-interceptor, OpenAPI op `/docs`, healthcheck |
 | ◻ | Nummerreeksen en prijsengine achter services | nummeruitgifte onder lock via de service; prijsengine lost `price_rules` op naar een verkoopprijs, met tests |
 | ◻ | Authenticatie en MFA (D-04) | inloggen, sessie, MFA, wachtwoordherstel; tests die **weigering** aantonen |
@@ -45,7 +47,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 
 | | Taak | Acceptatiecriterium |
 |---|---|---|
-| ◻ | `print_positions` en `artwork_assets` | meerdere bedrukposities per orderregel mogelijk |
+| ◻ | `artwork_assets` | klantlogo's en ontwerpen, herbruikbaar bij herhaalorders |
 | ◻ | Productoverzicht en -detail | varianten, staffels, bedrukopties, media |
 | ◻ | Handmatige invoer | een product volledig aanmaken zonder import |
 | ◻ | **CSV/XLSX-import** met diff-review | proefimport toont wijzigingen vóór toepassen; ontbrekende producten worden gemarkeerd, **niet verwijderd** |
@@ -114,8 +116,8 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 
 | | Taak | Acceptatiecriterium |
 |---|---|---|
-| ◻ | `shipments` en `shipment_items` | uitgaande zendingen, meerdere adressen, deelzendingen, tracking, pakbonnen |
-| ◻ | Leverstatus | een order is pas volledig geleverd als alle aantallen geleverd zijn; een deellevering sluit niets af |
+| ✅ | `shipments` en `shipment_items` | gereed in Fase 0 |
+| ✅ | Leverstatus | gereed en getest: een deellevering sluit niets af, geannuleerde regels houden een order niet open |
 | ⏸ | SnelStart-integratieproef | eerst verifiëren welke API's en abonnementsmogelijkheden er werkelijk zijn |
 | ◻ | Verkoopfacturatie | conceptfactuur, regels controleren, factuuradres aanpassen vóór registratie, btw, definitief registreren; geen dubbele facturen, geen stille overschrijving |
 | ◻ | Mollie | betaallinks, statussen, mislukt, verlopen, deelbetalingen, terugbetalingen, verrekening van vooruitbetalingen; webhook verifiëren en status ophalen |

@@ -31,6 +31,7 @@ Dit zijn geen details maar scope-bepalende regels uit de opdracht:
 | **Klantgoedkeuring wordt nooit gesimuleerd** | Geen enkele automatisering mag een akkoord van een klant namaken of overslaan. |
 | **DEV raakt nooit echte klanten** | Geen echte mail, geen echte betaling, geen definitieve factuur uit DEV. |
 | **Importbestanden verwijderen geen producten** | Een product dat ontbreekt in een importbestand wordt gemarkeerd, niet weggegooid. |
+| **Bedrijfskleding valt buiten scope** | Bevestigd 2026-10-28. Geen maattabellen, geen bestellen per maat, geen naamborduring per persoon. Raakt dit later wel aan de orde, dan is dat een eigen traject met gevolgen voor het product- en orderregelmodel. |
 | **Productie wijzigt alleen na expliciete toestemming** | Releases zijn handmatig goedgekeurd. |
 
 ## 3. Modules
@@ -77,6 +78,10 @@ Vier commits, 58 tabellen, 76 tests groen, typecheck schoon.
 | Auditlog, nummerreeksen, btw-tarieven, instellingen | gereed |
 | Staging en connectoren voor leveranciersdata | model gereed, connectoren niet gebouwd |
 | Drukproeven, inkoop met deelontvangsten | model gereed |
+| Offertes met onveranderlijke versies en digitaal akkoord | datamodel gereed, triggers actief |
+| Uitgaande zendingen met deelleveringen | datamodel en afleidlogica gereed |
+| Herkomst en idempotente synchronisatie (`external_references`) | gereed |
+| Bedrukposities genormaliseerd | gereed |
 | Inkoopfacturen | alleen een skelet; de nieuwe eisen vragen veel meer |
 | Kanalen, prijsregels, partnerfeeds, API-sleutels | model gereed |
 | Geld- en btw-logica, hashing, inkoopberekeningen | gereed en getest |

@@ -16,7 +16,12 @@ import {
   lockQuoteVersion,
   approvalIdempotencyKey,
 } from '../src/index'
-import { calculateOrderLine, sumOrderTotals } from '@rgh/contracts'
+import {
+  calculateOrderLine,
+  sumOrderTotals,
+  deriveLineLogisticsStatus,
+  isOrderFullyDelivered,
+} from '@rgh/contracts'
 
 const prisma = createPrismaClient()
 const YEAR = new Date().getFullYear()
@@ -120,12 +125,30 @@ async function seedBaseData() {
     { key: 'ORDER', year: YEAR, format: 'ORD-{year}-{counter:5}' },
     { key: 'PURCHASE_ORDER', year: YEAR, format: 'INK-{year}-{counter:5}' },
     { key: 'CUSTOMER', year: 0, format: '{counter:5}', start: 10000 },
+    { key: 'SHIPMENT', year: YEAR, format: 'VZ-{year}-{counter:5}' },
   ]
   for (const s of sequences) {
     await prisma.numberSequence.upsert({
       where: { key_year: { key: s.key, year: s.year } },
       update: { format: s.format },
       create: { key: s.key, year: s.year, format: s.format, lastValue: s.start ?? 0 },
+    })
+  }
+
+  const printPositions = [
+    { key: 'front', name: 'Voorzijde', sort: 10 },
+    { key: 'back', name: 'Achterzijde', sort: 20 },
+    { key: 'side', name: 'Zijkant', sort: 30 },
+    { key: 'lid', name: 'Deksel', sort: 40 },
+    { key: 'bottom', name: 'Onderzijde', sort: 50 },
+    { key: 'sleeve', name: 'Mouw', sort: 60 },
+    { key: 'other', name: 'Overig', sort: 99 },
+  ]
+  for (const pos of printPositions) {
+    await prisma.printPosition.upsert({
+      where: { key: pos.key },
+      update: { name: pos.name, sort: pos.sort },
+      create: pos,
     })
   }
 
@@ -141,7 +164,7 @@ async function seedBaseData() {
     await prisma.printMethod.upsert({ where: { key: m.key }, update: { name: m.name }, create: m })
   }
 
-  console.log(`  basisgegevens: ${vatRates.length} btw-tarieven, ${settings.length} instellingen, ${sequences.length} nummerreeksen, ${printMethods.length} bedrukkingstechnieken`)
+  console.log(`  basisgegevens: ${vatRates.length} btw-tarieven, ${settings.length} instellingen, ${sequences.length} nummerreeksen, ${printMethods.length} bedrukkingstechnieken, ${printPositions.length} bedrukposities`)
 }
 
 // --- Demogegevens ----------------------------------------------------------
@@ -203,6 +226,7 @@ async function seedDemo() {
 
   const screenPrint = await prisma.printMethod.findUniqueOrThrow({ where: { key: 'screen_print' } })
   const laser = await prisma.printMethod.findUniqueOrThrow({ where: { key: 'laser_engraving' } })
+  const front = await prisma.printPosition.findUniqueOrThrow({ where: { key: 'front' } })
 
   const productDefs = [
     { articleNumber: 'DEMO-1001', name: 'Thermosbeker Rivo 350 ml', category: 'drinkware', supplier: 'MIDOCEAN', purchase: 4.85, sale: 9.95, colors: ['Zwart', 'Wit', 'Navy'], method: laser.id, setup: 35 },
@@ -270,9 +294,24 @@ async function seedDemo() {
     }
 
     const option = await prisma.productPrintOption.upsert({
-      where: { productId_printMethodId_position: { productId: product.id, printMethodId: def.method, position: 'voorzijde' } },
+      where: {
+        productId_printMethodId_printPositionId: {
+          productId: product.id,
+          printMethodId: def.method,
+          printPositionId: front.id,
+        },
+      },
       update: { setupCost: def.setup },
-      create: { productId: product.id, printMethodId: def.method, position: 'voorzijde', maxColors: 4, setupCost: def.setup, ...demo },
+      create: {
+        productId: product.id,
+        printMethodId: def.method,
+        printPositionId: front.id,
+        // De tekst zoals een leverancier die zou aanleveren.
+        positionLabel: 'voorzijde',
+        maxColors: 4,
+        setupCost: def.setup,
+        ...demo,
+      },
     })
 
     for (const [minQuantity, price] of [[1, 0.45], [250, 0.32], [500, 0.24]] as const) {
@@ -433,6 +472,7 @@ async function seedDemoQuotesAndOrders(users: { id: string; email: string }[]) {
                       create: [{
                         printMethodId: l.option.printMethodId,
                         printMethodName: l.option.printMethod.name,
+                        printPositionId: l.option.printPositionId,
                         position: 'voorzijde',
                         colors: 1,
                         unitPrice: '0.3200',
@@ -578,6 +618,7 @@ async function seedDemoQuotesAndOrders(users: { id: string; email: string }[]) {
               create: it.printJobs.map((pj) => ({
                 printMethodId: pj.printMethodId,
                 printMethodName: pj.printMethodName,
+                printPositionId: pj.printPositionId,
                 position: pj.position,
                 colors: pj.colors,
                 unitPrice: pj.unitPrice,
@@ -794,6 +835,120 @@ async function seedChannels() {
   console.log(`  demo: 1 kanaal met ${products.length} producten in het assortiment, 1 globale margeregel`)
 }
 
+// --- Demo: uitgaande zending met deellevering ------------------------------
+
+async function seedDemoShipment() {
+  const demo = { isDemo: true }
+
+  const order = await prisma.order.findFirst({
+    where: { isDemo: true },
+    include: { lines: { orderBy: { lineNumber: 'asc' } }, customer: true },
+    orderBy: { number: 'asc' },
+  })
+  if (!order || order.lines.length === 0) {
+    console.log('  demo: geen order gevonden, zending overgeslagen')
+    return
+  }
+  if (await prisma.shipment.findFirst({ where: { orderId: order.id } })) {
+    console.log('  demo: 0 nieuwe zendingen')
+    return
+  }
+
+  const line = order.lines[0]
+  const deelAantal = Math.max(1, Math.floor(line.quantity / 2))
+  const number = await prisma.$transaction((tx) => issueNumber(tx, 'SHIPMENT', YEAR))
+  const deliveryAddress = await prisma.address.findFirst({
+    where: { customerId: order.customerId, type: 'DELIVERY' },
+  })
+
+  const shipment = await prisma.shipment.create({
+    data: {
+      number,
+      orderId: order.id,
+      deliveryAddressId: deliveryAddress?.id,
+      method: 'OWN_SHIPMENT',
+      status: 'DELIVERED',
+      carrier: 'PostNL',
+      trackingCode: '3SDEMO0000001',
+      shippedAt: new Date(Date.now() - 2 * 86400000),
+      deliveredAt: new Date(Date.now() - 1 * 86400000),
+      recipientName: 'Demo Inkoper',
+      notes: 'Eerste deellevering. De order blijft daarmee bewust niet volledig geleverd.',
+      ...demo,
+      items: { create: [{ orderLineId: line.id, quantity: deelAantal, ...demo }] },
+    },
+  })
+
+  // Statussen afgeleid uit de zending, niet handmatig gezet.
+  const geleverd = deelAantal
+  const lineStatus = deriveLineLogisticsStatus(
+    { quantity: line.quantity, shipped: geleverd, delivered: geleverd },
+    line.logisticsStatus as never,
+  )
+  await prisma.orderLine.update({
+    where: { id: line.id },
+    data: { logisticsStatus: lineStatus as never },
+  })
+
+  await prisma.document.create({
+    data: {
+      category: 'PACKING_SLIP',
+      title: `Pakbon ${number}`,
+      visibility: 'CUSTOMER',
+      customerId: order.customerId,
+      orderId: order.id,
+      shipmentId: shipment.id,
+      ...demo,
+      versions: {
+        create: [{
+          versionNumber: 1,
+          storageKey: `demo/shipments/${shipment.id}/pakbon.pdf`,
+          fileName: `${number}.pdf`,
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          checksum: 'demo-checksum-pakbon',
+        }],
+      },
+    },
+  })
+
+  const volledig = isOrderFullyDelivered(
+    order.lines.map((l) => ({
+      quantity: l.quantity,
+      shipped: l.id === line.id ? geleverd : 0,
+      delivered: l.id === line.id ? geleverd : 0,
+    })),
+  )
+  console.log(`  demo: 1 zending ${number} met ${deelAantal} van ${line.quantity} stuks; order volledig geleverd: ${volledig}`)
+}
+
+// --- Demo: herkomst uit Teamleader ----------------------------------------
+
+async function seedDemoExternalReferences() {
+  const customers = await prisma.customer.findMany({ where: { isDemo: true }, orderBy: { number: 'asc' } })
+  for (const customer of customers) {
+    await prisma.externalReference.upsert({
+      where: {
+        system_entityType_entityId: {
+          system: 'TEAMLEADER',
+          entityType: 'Customer',
+          entityId: customer.id,
+        },
+      },
+      update: { externalNumber: customer.number },
+      create: {
+        system: 'TEAMLEADER',
+        entityType: 'Customer',
+        entityId: customer.id,
+        externalId: `TL-DEMO-${customer.number}`,
+        externalNumber: customer.number,
+        isDemo: true,
+      },
+    })
+  }
+  console.log(`  demo: ${customers.length} externe verwijzingen naar Teamleader`)
+}
+
 async function main() {
   console.log('seed start')
   await seedPermissions()
@@ -802,6 +957,8 @@ async function main() {
   await seedDemoQuotesAndOrders(users)
   await seedConnections()
   await seedChannels()
+  await seedDemoShipment()
+  await seedDemoExternalReferences()
 
   const counts = {
     klanten: await prisma.customer.count(),
@@ -813,6 +970,8 @@ async function main() {
     producten: await prisma.product.count(),
     verbindingen: await prisma.supplierConnection.count(),
     kanalen: await prisma.shopChannel.count(),
+    zendingen: await prisma.shipment.count(),
+    externeVerwijzingen: await prisma.externalReference.count(),
     demorijen: await prisma.customer.count({ where: { isDemo: true } }),
   }
   console.log('seed klaar:', counts)
