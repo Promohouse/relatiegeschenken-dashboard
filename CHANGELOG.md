@@ -6,6 +6,22 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **Beoordelingsscherm voor imports** (`/imports`). Per voorstel staat er wat
+  er verandert, veld voor veld, met de oude en de nieuwe waarde naast elkaar.
+  Toepassen of afwijzen kan per regel of in één keer voor de hele import.
+  Het scherm toont ook per koppeling welke capabilities er zijn, en streept
+  door wat gedocumenteerd is maar niet gebouwd — bestellen dus.
+- **Toepassen raakt pas nu de catalogus**, met vier waarborgen: een
+  proefimport is niet toe te passen (die legt de brongegevens niet vast); een
+  voorstel waarvan het veld sinds de import door iemand anders is gewijzigd
+  wordt geweigerd in plaats van dat werk te overschrijven; een variant die uit
+  de bron verdwijnt gaat op inactief en nooit weg; en elke toepassing komt in
+  het auditlog met de vermelding uit welke import hij kwam.
+- Een nieuw product uit een import wordt opgebouwd uit de vastgelegde
+  brondata, opnieuw vertaald door dezelfde connector die hem ophaalde. Wat in
+  de catalogus komt is daarmee altijd terug te voeren op wat de leverancier
+  werkelijk stuurde.
+
 - **De connectorlaag.** Een koppeling haalt op en vertaalt naar één neutrale
   vorm; wegschrijven doet de importpijplijn. Credentials staan versleuteld in
   de database (AES-256-GCM met een eigen salt per rij), niet in de code of in

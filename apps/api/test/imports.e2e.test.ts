@@ -58,7 +58,7 @@ describe('importpijplijn', () => {
     prisma = app.get(PrismaService)
 
     const rechten = await Promise.all(
-      ['imports:view', 'imports:create'].map((key) =>
+      ['imports:view', 'imports:create', 'imports:update'].map((key) =>
         prisma.unscoped.permission.upsert({
           where: { key }, update: {},
           create: { key, module: 'imports', action: key.split(':')[1] },
@@ -100,7 +100,12 @@ describe('importpijplijn', () => {
 
   afterAll(async () => {
     await prisma.unscoped.supplierConnection.deleteMany({ where: { supplierId } })
+    const uitImport = await prisma.unscoped.productSupplier.findMany({
+      where: { supplierId }, select: { productId: true },
+    })
     await prisma.unscoped.productSupplier.deleteMany({ where: { supplierId } })
+    await prisma.unscoped.auditLog.deleteMany({ where: { entityId: { in: uitImport.map((p) => p.productId) } } })
+    await prisma.unscoped.product.deleteMany({ where: { id: { in: uitImport.map((p) => p.productId) } } })
     await prisma.unscoped.product.deleteMany({ where: { articleNumber: { startsWith: tag } } })
     await prisma.unscoped.supplier.deleteMany({ where: { id: supplierId } })
     await prisma.unscoped.auditLog.deleteMany({ where: { entity: 'ImportRun' } })
@@ -265,6 +270,229 @@ describe('importpijplijn', () => {
       // En het product staat er nog, gewoon actief: een voorstel is geen daad.
       const naLoop = await prisma.unscoped.product.findUnique({ where: { id: verdwenen.id } })
       expect(naLoop?.isActive).toBe(true)
+    })
+  })
+
+  describe('beoordelen en toepassen', () => {
+    beforeAll(async () => {
+      // Het vorige blok koppelde AR1804 aan een eigen product om de
+      // veldvergelijking te tonen. Hier gaat het om aanmaken, dus die
+      // koppeling moet weg - anders is het voorstel een UPDATE.
+      const koppeling = await prisma.unscoped.productSupplier.findFirst({
+        where: { supplierId, supplierArticleNumber: 'AR1804' },
+      })
+      if (koppeling) {
+        await prisma.unscoped.productSupplier.delete({ where: { id: koppeling.id } })
+        await prisma.unscoped.productVariant.deleteMany({ where: { productId: koppeling.productId } })
+        await prisma.unscoped.product.delete({ where: { id: koppeling.productId } })
+      }
+    })
+
+    /** Een echte import, zodat de brongegevens vastliggen. */
+    const echteImport = async () => {
+      const res = await start({ dryRun: false }).expect(201)
+      const changes = await api()
+        .get(`/api/imports/runs/${res.body.importRunId}/changes`).set('Cookie', cookie).expect(200)
+      return { runId: res.body.importRunId as string, changes: changes.body as { id: string; externalId: string; changeType: string }[] }
+    }
+
+    it('weigert toepassen van een proefimport', async () => {
+      const proef = await start({ dryRun: true }).expect(201)
+      const changes = await api()
+        .get(`/api/imports/runs/${proef.body.importRunId}/changes`).set('Cookie', cookie).expect(200)
+
+      const res = await api()
+        .post(`/api/imports/changes/${changes.body[0].id}/apply`).set('Cookie', cookie)
+        .expect(422)
+      expect(res.body.error.message).toContain('proefimport')
+    })
+
+    it('maakt bij toepassen het product met varianten en de leverancierskoppeling', async () => {
+      const { changes } = await echteImport()
+      const nieuw = changes.find((c) => c.externalId === 'AR1804' && c.changeType === 'CREATE')!
+
+      const res = await api()
+        .post(`/api/imports/changes/${nieuw.id}/apply`).set('Cookie', cookie).expect(201)
+      expect(res.body.applied).toBe(1)
+
+      const product = await prisma.unscoped.product.findFirst({
+        where: { articleNumber: 'AR1804' },
+        include: { variants: { orderBy: { sku: 'asc' } }, suppliers: true },
+      })
+
+      expect(product).not.toBeNull()
+      expect(product!.name).toBe('ARCONOT')
+      expect(product!.material).toBe('PU')
+      expect(product!.countryOfOrigin).toBe('CN')
+      expect(product!.printable).toBe(true)
+
+      // Varianten met kleurcode en ean, want die heeft de leverancier geleverd.
+      expect(product!.variants.map((v) => v.sku)).toEqual(['AR1804-03', 'AR1804-06'])
+      expect(product!.variants[0].colorCode).toBe('03')
+      expect(product!.variants[0].colorName).toBe('black')
+      expect(product!.variants[0].eanCode).toBe('8719941012868')
+
+      // En de koppeling met de leverancier, op hun eigen artikelnummer.
+      expect(product!.suppliers).toHaveLength(1)
+      expect(product!.suppliers[0].supplierArticleNumber).toBe('AR1804')
+      // De inkoopprijs komt uit de prijslijst, niet uit de catalogus.
+      expect(product!.suppliers[0].purchasePrice.toString()).toBe('0')
+    })
+
+    it('legt in het auditlog vast dat dit uit een import kwam', async () => {
+      const product = await prisma.unscoped.product.findFirstOrThrow({ where: { articleNumber: 'AR1804' } })
+      const regel = await prisma.unscoped.auditLog.findFirst({
+        where: { entity: 'Product', entityId: product.id, action: 'CREATE' },
+        orderBy: { occurredAt: 'desc' },
+      })
+      const diff = regel?.diff as Record<string, { naar: unknown }> | null
+      expect(String(diff?.bron?.naar)).toContain('Import ')
+      expect(regel?.userId).toBe(ikId)
+    })
+
+    it('weigert dezelfde wijziging een tweede keer', async () => {
+      const toegepast = await prisma.unscoped.stagedChange.findFirstOrThrow({
+        where: { status: 'APPLIED' },
+      })
+      const res = await api()
+        .post(`/api/imports/changes/${toegepast.id}/apply`).set('Cookie', cookie).expect(409)
+      expect(res.body.error.message).toContain('al toegepast')
+    })
+
+    it('ziet na toepassen geen verschil meer', async () => {
+      const res = await start({ dryRun: true }).expect(201)
+      expect(res.body.summary).toMatchObject({ created: 0, updated: 0, unchanged: 1 })
+    })
+
+    it('past een wijziging toe en voegt een nieuwe variant toe', async () => {
+      antwoord = [{
+        ...PRODUCT_ANTWOORD[0],
+        product_name: 'ARCONOT PLUS',
+        variants: [
+          ...PRODUCT_ANTWOORD[0].variants,
+          { variant_id: '10168711', sku: 'AR1804-10', color_description: 'red', color_code: '10', digital_assets: [] },
+        ],
+      }]
+      try {
+        const { changes } = await echteImport()
+        const wijziging = changes.find((c) => c.externalId === 'AR1804')!
+        await api().post(`/api/imports/changes/${wijziging.id}/apply`).set('Cookie', cookie).expect(201)
+
+        const product = await prisma.unscoped.product.findFirstOrThrow({
+          where: { articleNumber: 'AR1804' },
+          include: { variants: { orderBy: { sku: 'asc' } } },
+        })
+        expect(product.name).toBe('ARCONOT PLUS')
+        expect(product.variants.map((v) => v.sku)).toEqual(['AR1804-03', 'AR1804-06', 'AR1804-10'])
+      } finally {
+        antwoord = PRODUCT_ANTWOORD
+      }
+    })
+
+    it('zet een verdwenen variant op inactief in plaats van hem te verwijderen', async () => {
+      // AR1804-10 zit niet meer in het antwoord: de vorige test zette hem erin.
+      const { changes } = await echteImport()
+      const wijziging = changes.find((c) => c.externalId === 'AR1804')!
+      await api().post(`/api/imports/changes/${wijziging.id}/apply`).set('Cookie', cookie).expect(201)
+
+      const variant = await prisma.unscoped.productVariant.findUnique({ where: { sku: 'AR1804-10' } })
+      expect(variant).not.toBeNull()
+      expect(variant!.isActive).toBe(false)
+    })
+
+    it('weigert een voorstel dat achterhaald is door een wijziging van iemand anders', async () => {
+      antwoord = [{ ...PRODUCT_ANTWOORD[0], product_name: 'NAAM UIT DE BRON' }]
+      try {
+        const { changes } = await echteImport()
+        const wijziging = changes.find((c) => c.externalId === 'AR1804')!
+
+        // Ondertussen past iemand het product met de hand aan.
+        await prisma.unscoped.product.updateMany({
+          where: { articleNumber: 'AR1804' },
+          data: { name: 'Handmatig aangepast' },
+        })
+
+        const res = await api()
+          .post(`/api/imports/changes/${wijziging.id}/apply`).set('Cookie', cookie).expect(409)
+        expect(res.body.error.message).toContain('sinds de import gewijzigd')
+
+        // En het handwerk staat er nog.
+        const product = await prisma.unscoped.product.findFirstOrThrow({ where: { articleNumber: 'AR1804' } })
+        expect(product.name).toBe('Handmatig aangepast')
+      } finally {
+        antwoord = PRODUCT_ANTWOORD
+      }
+    })
+
+    it('wijst een voorstel af en laat de catalogus met rust', async () => {
+      const { changes } = await echteImport()
+      const wijziging = changes.find((c) => c.externalId === 'AR1804')!
+
+      await api().post(`/api/imports/changes/${wijziging.id}/reject`).set('Cookie', cookie).expect(204)
+
+      const na = await prisma.unscoped.stagedChange.findUniqueOrThrow({ where: { id: wijziging.id } })
+      expect(na.status).toBe('REJECTED')
+      expect(na.reviewedById).toBe(ikId)
+      expect(na.appliedAt).toBeNull()
+
+      const res = await api()
+        .post(`/api/imports/changes/${wijziging.id}/apply`).set('Cookie', cookie).expect(409)
+      expect(res.body.error.message).toContain('al afgewezen')
+    })
+
+    it('zet een verdwenen product op inactief, en verwijdert het niet', async () => {
+      const verdwenen = await prisma.unscoped.product.create({
+        data: {
+          articleNumber: `${tag}-WEG999`,
+          name: 'Uit de collectie',
+          suppliers: { create: [{ supplierId, supplierArticleNumber: 'WEG999', purchasePrice: '1.0000' }] },
+        },
+      })
+
+      const { changes } = await echteImport()
+      const voorstel = changes.find((c) => c.externalId === 'WEG999')!
+      await api().post(`/api/imports/changes/${voorstel.id}/apply`).set('Cookie', cookie).expect(201)
+
+      const na = await prisma.unscoped.product.findUnique({ where: { id: verdwenen.id } })
+      expect(na).not.toBeNull()
+      expect(na!.isActive).toBe(false)
+    })
+
+    it('past alles van een import in één keer toe en meldt wat blijft liggen', async () => {
+      const { runId, changes } = await echteImport()
+      expect(changes.length).toBeGreaterThan(0)
+
+      // Eén voorstel alvast afwijzen: dat hoort niet meer mee te gaan.
+      await api().post(`/api/imports/changes/${changes[0].id}/reject`).set('Cookie', cookie).expect(204)
+
+      const res = await api().post(`/api/imports/runs/${runId}/apply`).set('Cookie', cookie).expect(201)
+      expect(res.body.applied).toBe(changes.length - 1)
+
+      const open = await prisma.unscoped.stagedChange.count({ where: { importRunId: runId, status: 'PENDING' } })
+      expect(open).toBe(0)
+    })
+
+    it('laat zonder imports:update niets toepassen', async () => {
+      const { changes } = await echteImport()
+      const email = `${tag}-kijker@test.local`
+      const kijker = await maakGebruikerMetWachtwoord(app, { email, name: 'Kijker', password: wachtwoord })
+      const kijkRecht = await prisma.unscoped.permission.findUniqueOrThrow({ where: { key: 'imports:view' } })
+      const rol = await prisma.unscoped.role.create({
+        data: { key: `${tag}-kijk`, name: 'Alleen kijken', permissions: { create: [{ permissionId: kijkRecht.id }] } },
+      })
+      await prisma.unscoped.userRole.create({ data: { userId: kijker.id, roleId: rol.id } })
+      const login = await api().post('/api/auth/sign-in/email').send({ email, password: wachtwoord }).expect(200)
+      const kijkCookie = ((login.headers['set-cookie'] as unknown as string[]) ?? [])
+        .map((c) => c.split(';')[0]).join('; ')
+
+      await api().get('/api/imports/runs').set('Cookie', kijkCookie).expect(200)
+      await api().post(`/api/imports/changes/${changes[0].id}/apply`).set('Cookie', kijkCookie).expect(403)
+      await api().post(`/api/imports/changes/${changes[0].id}/reject`).set('Cookie', kijkCookie).expect(403)
+
+      await prisma.unscoped.userRole.deleteMany({ where: { userId: kijker.id } })
+      await prisma.unscoped.session.deleteMany({ where: { userId: kijker.id } })
+      await prisma.unscoped.account.deleteMany({ where: { userId: kijker.id } })
+      await prisma.unscoped.user.deleteMany({ where: { id: kijker.id } })
     })
   })
 

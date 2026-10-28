@@ -170,6 +170,18 @@ export class MidoceanConnector implements SupplierConnector {
       }))
   }
 
+  /**
+   * Een opgeslagen payload opnieuw vertalen. Dezelfde functie als bij het
+   * ophalen, zodat opgeslagen en verse data nooit anders uitpakken.
+   */
+  parseProduct(payload: unknown): CanonicalProduct {
+    const rauw = payload as MidoceanProduct
+    if (!rauw?.master_code) {
+      throw new ConnectorError(this.key, 'opgeslagen payload', 'De opgeslagen brondata heeft geen master_code.')
+    }
+    return this.naarProduct(rauw)
+  }
+
   private naarProduct(rauw: MidoceanProduct): CanonicalProduct {
     const varianten = (rauw.variants ?? []).filter((v) => !!v.sku)
     // De categorie staat per variant, niet op het product. Alle varianten van

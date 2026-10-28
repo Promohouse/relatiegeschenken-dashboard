@@ -107,6 +107,12 @@ export interface SupplierConnector {
   readonly capabilities: ConnectorCapability[]
 
   fetchCatalog?(context: ConnectorContext): Promise<FetchedRecord<CanonicalProduct>[]>
+  /**
+   * Een eerder vastgelegde payload opnieuw vertalen, zonder de leverancier te
+   * bevragen. Nodig bij het toepassen van een wijziging: wat in de catalogus
+   * komt moet terug te voeren zijn op wat de leverancier werkelijk stuurde.
+   */
+  parseProduct?(payload: unknown): CanonicalProduct
   fetchPrices?(context: ConnectorContext): Promise<FetchedRecord<CanonicalPrice>[]>
   fetchStock?(context: ConnectorContext): Promise<FetchedRecord<CanonicalStock>[]>
 }

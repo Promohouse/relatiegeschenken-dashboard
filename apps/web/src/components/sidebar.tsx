@@ -1,6 +1,6 @@
 import {
   Building2, ClipboardList, FileText, Folder, LayoutDashboard, Package,
-  Truck, CheckSquare, Settings, Users, ShieldCheck, Receipt,
+  Truck, CheckSquare, Settings, Users, ShieldCheck, Receipt, Download,
 } from 'lucide-react'
 import { NavLink } from './nav-link'
 import { LogoutButton } from './logout-button'
@@ -16,6 +16,7 @@ const GEBOUWD = [
   { href: '/klanten', label: 'Klanten', icon: Building2, permissie: 'customers:view' },
   { href: '/beheer/gebruikers', label: 'Gebruikers', icon: Users, permissie: 'users:view' },
   { href: '/beheer/rollen', label: 'Rollen', icon: ShieldCheck, permissie: 'users:view' },
+  { href: '/imports', label: 'Imports', icon: Download, permissie: 'imports:view' },
   {
     href: '/beheer/betalingsvoorwaarden', label: 'Betalingsvoorwaarden',
     icon: Receipt, permissie: 'settings:view',
