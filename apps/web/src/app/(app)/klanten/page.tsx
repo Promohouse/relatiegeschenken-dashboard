@@ -5,6 +5,7 @@ import { apiGet } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { getCurrentUser, mag } from '@/lib/session'
 
 type Zoekparams = {
   search?: string
@@ -62,7 +63,10 @@ export default async function KlantenPagina({
     pageSize: '25',
   })
 
-  const data = await apiGet<PaginatedCustomers>(`/api/customers?${query}`)
+  const [data, user] = await Promise.all([
+    apiGet<PaginatedCustomers>(`/api/customers?${query}`),
+    getCurrentUser(),
+  ])
   const statusNu = params.status ?? 'all'
 
   return (
@@ -76,6 +80,15 @@ export default async function KlantenPagina({
           </p>
         </div>
 
+        <div className="flex items-end gap-2">
+        {mag(user, 'customers:create') && (
+          <Link
+            href="/klanten/nieuw"
+            className="inline-flex h-9 items-center rounded bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+          >
+            Nieuwe klant
+          </Link>
+        )}
         <form action="/klanten" className="flex items-end gap-2">
           <input type="hidden" name="status" value={statusNu} />
           <div className="relative">
@@ -96,6 +109,7 @@ export default async function KlantenPagina({
             Zoeken
           </Button>
         </form>
+        </div>
       </div>
 
       <div className="mt-5 flex gap-1">

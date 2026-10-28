@@ -6,6 +6,9 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Klanten aanmaken en wijzigen vanuit het scherm, met foutmeldingen bij het
+  veld waar ze horen, en op inactief zetten met een bevestiging die zegt dat
+  er niets verloren gaat. Knoppen verschijnen alleen bij het juiste recht.
 - End-to-end-tests met Playwright: tien tests die in een echte browser
   inloggen via het formulier, een verkeerd wachtwoord afhandelen, doorsturen
   en terugkeren, zoeken, filteren, sorteren en uitloggen. Daarmee is ook het

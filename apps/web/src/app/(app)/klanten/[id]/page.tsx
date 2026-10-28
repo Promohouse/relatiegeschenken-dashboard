@@ -4,6 +4,8 @@ import { ArrowLeft, Mail, MapPin, Phone, User } from 'lucide-react'
 import type { CustomerDetail } from '@rgh/contracts'
 import { apiGet, ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
+import { KlantStatusKnop } from '@/components/klant-status-knop'
+import { getCurrentUser, mag } from '@/lib/session'
 
 const ADRESSOORT: Record<string, string> = {
   INVOICE: 'Factuuradres',
@@ -21,6 +23,8 @@ function Veld({ label, children }: { label: string; children: React.ReactNode })
 
 export default async function KlantPagina({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  const user = await getCurrentUser()
 
   let klant: CustomerDetail
   try {
@@ -52,7 +56,20 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
           </p>
         </div>
 
-        <div className="flex gap-6 text-right">
+        <div className="flex items-center gap-6">
+          {mag(user, 'customers:update') && (
+            <div className="flex gap-2">
+              <Link
+                href={`/klanten/${klant.id}/bewerken`}
+                className="inline-flex h-8 items-center rounded border border-rule-strong bg-surface px-3 text-sm font-medium transition-colors hover:bg-sunk"
+              >
+                Bewerken
+              </Link>
+              <KlantStatusKnop klantId={klant.id} isActief={klant.isActive} />
+            </div>
+          )}
+
+          <div className="flex gap-6 text-right">
           <div>
             <p className="text-2xl font-bold tabular">{klant.openQuotes}</p>
             <p className="text-xs uppercase tracking-wide text-ink-faint">Open offertes</p>
@@ -60,6 +77,7 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
           <div>
             <p className="text-2xl font-bold tabular">{klant.activeOrders}</p>
             <p className="text-xs uppercase tracking-wide text-ink-faint">Actieve orders</p>
+          </div>
           </div>
         </div>
       </div>

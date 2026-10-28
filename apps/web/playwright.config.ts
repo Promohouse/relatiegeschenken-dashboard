@@ -1,4 +1,13 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
+
+// De .env staat in de repository-root. Het testproces heeft hem nodig om na
+// afloop zijn eigen gegevens op te ruimen.
+for (const regel of readFileSync(resolve(__dirname, '../../.env'), 'utf8').split('\n')) {
+  const m = regel.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
+  if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '')
+}
 
 /**
  * End-to-end tests draaien tegen de echte applicatie: een echte browser, de

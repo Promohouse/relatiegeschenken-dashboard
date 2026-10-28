@@ -171,9 +171,14 @@ draaiende applicatie. Die gebruikt de **ontwikkeldatabase** en de
 demo-accounts, dus draai eerst `npm run db:seed`. Playwright start api en
 dashboard zelf als ze nog niet draaien.
 
-Let op bij het schrijven van e2e-tests: Next voegt een onzichtbaar
-`role="alert"`-element toe voor schermlezers, dus `getByRole('alert')` is
-dubbelzinnig. Selecteer op de tekst die de gebruiker echt ziet.
+Twee dingen bij het schrijven van e2e-tests:
+
+- Next voegt een onzichtbaar `role="alert"`-element toe voor schermlezers, dus
+  `getByRole('alert')` is dubbelzinnig. Selecteer op de tekst die de gebruiker
+  echt ziet.
+- Een test die gegevens aanmaakt ruimt ze achteraf zelf op, rechtstreeks via
+  `@rgh/db` en op een eigen voorvoegsel. Er is bewust geen verwijder-endpoint:
+  klanten horen niet verwijderd te worden, dus kan de applicatie dat niet.
 
 ## Beveiliging: twee dingen die je moet weten
 

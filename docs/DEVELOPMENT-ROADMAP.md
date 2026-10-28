@@ -37,11 +37,12 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 
 | | Taak | Acceptatiecriterium |
 |---|---|---|
-| ✅ | End-to-end-tests op inloggen en klanten | 10 Playwright-tests in een echte browser: inloggen via het formulier, verkeerd wachtwoord, doorsturen en terugkeren, zoeken, filteren, sorteren, uitloggen |
+| ✅ | End-to-end-tests op inloggen en klanten | 16 Playwright-tests in een echte browser: inloggen, verkeerd wachtwoord, doorsturen en terugkeren, zoeken, filteren, sorteren, uitloggen, en klanten aanmaken, wijzigen en deactiveren |
 | ✅ | Basislayout, zijbalk, inlogscherm | gereed: vaste zijbalk die onderscheid maakt tussen gebouwd en in aanbouw, inlogscherm, demowaarschuwing, uitloggen |
 | ✅ | Klanten-API | zoeken op naam, nummer, e-mail, btw-nummer en contactpersoon; filteren, sorteren, pagineren; aanmaken met uitgegeven klantnummer; wijzigen met auditverschil; op inactief zetten in plaats van verwijderen |
 | ✅ | Klantenoverzicht (scherm) | gereed: zoeken, filteren op actief, sorteren per kolom, pagineren. Werkt zonder JavaScript, want het zijn gewone links en een formulier |
-| ◻ | Klantdetail | gegevens, contactpersonen en adressen staan er; afspraken, orders en documenten volgen met die modules |
+| ✅ | Klantdetail | gegevens, contactpersonen en adressen; afspraken, orders en documenten volgen met die modules |
+| ✅ | Klanten aanmaken en wijzigen | formulier met foutmeldingen bij het veld zelf, op inactief zetten met bevestiging, knoppen alleen zichtbaar met het juiste recht |
 | ◻ | Betalingsvoorwaarden en klantprijzen | een klantprijs gaat voor op de algemene prijsregel, aangetoond met een test |
 | ◻ | Gebruikersbeheer en rollen | rechten per module en actie instelbaar zonder code |
 | ◻ | Klantgebruikers met klantrollen | alleen een goedkeurder kan goedkeuren; test op de andere rollen |
