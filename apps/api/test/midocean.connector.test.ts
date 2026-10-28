@@ -84,7 +84,9 @@ describe('midocean: foutmeldingen uit hun Appendix C', () => {
     } catch (fout) {
       expect(fout).toBeInstanceOf(ConnectorError)
       expect((fout as ConnectorError).bron).toBe('/gateway/stock/2.0')
-      expect((fout as ConnectorError).status).toBe(404)
+      expect((fout as ConnectorError).upstreamStatus).toBe(404)
+      // En naar buiten toe een 502: de leverancier faalde, niet wij.
+      expect((fout as ConnectorError).status).toBe(502)
     }
   })
 })

@@ -30,6 +30,33 @@ Twee aandachtspunten die het bouwen raken:
    en geeft dan `503 Service Temporarily Unavailable`. Een nachtelijke import
    tegen test is dus zinloos; dat is geen storing van ons.
 
+### De 401 zegt niet wát er mis is
+
+Gemeten op 2026-10-28 met een sleutel die net van midocean kwam. Drie
+verzoeken naar `apitest.midocean.com/gateway/stock/2.0`:
+
+| Verzoek | Antwoord |
+|---|---|
+| Met de ontvangen sleutel | 401, *Unauthorized application request* |
+| Met een verzonnen sleutel | 401, **exact dezelfde tekst** |
+| Zonder enige sleutel | 401, **exact dezelfde tekst** |
+
+De melding bevat `User - Default and Application:sys:defaultApplication`, wat
+erop wijst dat de gateway de sleutel niet herkent en terugvalt op een
+standaardtoepassing. Ook op `api.midocean.com` en op alle vijf de endpoints
+hetzelfde beeld.
+
+**Gevolg voor ons:** aan het antwoord is niet te zien of de sleutel verkeerd
+is, of alleen nog niet geabonneerd op het endpoint. Onze foutmelding noemt
+daarom allebei de oorzaken. Verder is het geen 500: een leverancier die
+weigert is geen storing van ons, dus geeft onze api een 502 met de
+leveranciersmelding erbij.
+
+**Op te lossen aan de kant van de opdrachtgever:** in het midocean-account
+onder *Account > Customer API* de endpoints aanvinken en op Update klikken, en
+bij de contactpersoon navragen of dit een sleutel voor test of voor productie
+is. Die twee zijn niet uitwisselbaar.
+
 ## Endpoints die wij gebruiken
 
 Alle GET. Zonder `Accept`-header is het antwoord JSON.

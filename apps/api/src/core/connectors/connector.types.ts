@@ -1,4 +1,5 @@
 import type { ConnectorCapability } from '@rgh/db'
+import { IntegrationError } from '../errors/domain-errors'
 
 /**
  * Wat elke leverancierskoppeling moet kunnen.
@@ -120,17 +121,24 @@ export interface SupplierConnector {
 /**
  * Een fout van de leverancier, met de verzochte bron erbij.
  *
- * Deze draagt bewust de leveranciersmelding mee: bij een koppeling is de
- * tekst van de ander meestal het enige aanknopingspunt.
+ * Erft van IntegrationError, en is daarmee een domeinfout: een leverancier
+ * die weigert is geen interne fout van ons. Zonder die erfenis werd deze
+ * melding door de foutafhandeling vervangen door "er is een onverwachte fout
+ * opgetreden", en dat is precies de informatie die iemand nodig heeft om het
+ * op te lossen.
+ *
+ * De melding is voor de gebruiker geschreven en komt dus wel naar buiten; de
+ * technische details gaan als `details` mee.
  */
-export class ConnectorError extends Error {
+export class ConnectorError extends IntegrationError {
   constructor(
     readonly connector: string,
     readonly bron: string,
     message: string,
-    readonly status?: number,
+    /** De statuscode die de leverancier gaf, niet die van ons antwoord. */
+    readonly upstreamStatus?: number,
   ) {
-    super(message)
+    super(message, { connector, bron, upstreamStatus })
     this.name = 'ConnectorError'
   }
 }

@@ -7,7 +7,8 @@
     "start": "dotenv -e ../../.env -- node -r @swc-node/register src/main.ts",
     "test": "node ../../scripts/prepare-test-db.mjs && vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "seed:accounts": "dotenv -e ../../.env -- node -r @swc-node/register scripts/seed-accounts.ts"
+    "seed:accounts": "dotenv -e ../../.env -- node -r @swc-node/register scripts/seed-accounts.ts",
+    "connection:credentials": "dotenv -e ../../.env -- node -r @swc-node/register scripts/set-connection-credentials.ts"
   },
   "dependencies": {
     "@nestjs/common": "12.3.2",

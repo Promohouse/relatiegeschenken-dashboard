@@ -6,6 +6,11 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Script om credentials van een koppeling versleuteld op te slaan
+  (`npm run connection:credentials -w @rgh/api`). De waarde komt uit een
+  omgevingsvariabele en niet uit een argument, want een argument belandt in de
+  shell-geschiedenis en in de procestabel. Na opslaan volgt een terugleesproef,
+  zonder de waarde te tonen.
 - **Beoordelingsscherm voor imports** (`/imports`). Per voorstel staat er wat
   er verandert, veld voor veld, met de oude en de nieuwe waarde naast elkaar.
   Toepassen of afwijzen kan per regel of in één keer voor de hele import.
@@ -199,6 +204,12 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- **Een fout van een leverancier geeft 502 in plaats van 500.** Bij de eerste
+  echte poging met een midocean-sleutel verdween onze zorgvuldig geschreven
+  uitleg achter "er is een onverwachte fout opgetreden". Een leverancier die
+  weigert is geen storing van ons: `ConnectorError` is nu een domeinfout, dus
+  de melding komt bij de gebruiker terecht, met de bron en de statuscode van
+  de leverancier als details.
 - **De importvergelijking draait nu altijd** (ADR-0014, corrigeert ADR-0013).
   Eerst besliste de hash van de leveranciersdata of er überhaupt vergeleken
   werd. Dat mist twee gevallen: een artikel dat pas later aan een eigen product
