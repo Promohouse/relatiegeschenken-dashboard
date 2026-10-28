@@ -833,7 +833,12 @@ async function seedConnections() {
         { capability: 'PRICE_TIERS', priority: 10, schedule: '0 2 * * *' },
         // Twee keer per dag is genoeg; de opdrachtgever hoeft geen
         // voorraadstand per uur. midocean ververst zelf elk uur.
-        { capability: 'INVENTORY', priority: 10, schedule: '0 7,15 * * *' },
+        //
+        // Let op: deze tijden zijn bedoeld als Nederlandse tijd. De planner is
+        // nog niet gebouwd (ADR-0009); zodra die er is moet hij op
+        // Europe/Amsterdam draaien, anders schuift 06:00 in de winter naar
+        // 07:00 en in de zomer naar 08:00.
+        { capability: 'INVENTORY', priority: 10, schedule: '0 6,18 * * *' },
         // Gedocumenteerd en uit: bestellen gaat buiten het platform om
         // (harde regel 13). Zie ADR-0013 voor wat er nodig is om dit later
         // wel te bouwen.

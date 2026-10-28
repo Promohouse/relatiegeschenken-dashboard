@@ -28,7 +28,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | Authenticatie en MFA (ADR-0012) | gereed: better-auth op onze eigen users-tabel, registreren, inloggen, sessiecookie, tweefactor-plugin. Wachtwoordherstel per e-mail wacht op Fase 7 |
 | ✅ | Rechten-guard | gereed: sluit dicht bij een route zonder declaratie; getest op 401, 403 en het verschil dat een rol maakt |
 | ✅ | Klantscope-extensie | gereed en veilig als standaard: een vreemd id levert niets op, ook niet via findUnique; 10 tests |
-| ◻ | Jobqueue: BullMQ op Valkey (ADR-0009) | een taak met retry en dead-letter, zichtbaar en herstartbaar; Valkey draait lokaal |
+| ◻ | Jobqueue: BullMQ op Valkey (ADR-0009) | een taak met retry en dead-letter, zichtbaar en herstartbaar; Valkey draait lokaal. **De planner draait op Europe/Amsterdam**: de ingestelde tijden zijn Nederlandse tijd, en op UTC zou 06:00 in de winter 07:00 worden en in de zomer 08:00 |
 | ◻ | Storage-adapter | upload, download, controlewaarde, versie; lokale schijf werkend |
 | ⏸ | Docker Compose lokaal | wacht op Docker op de machine |
 | ⏸ | Kubernetes, Helm, CI/CD, monitoring | wacht op de hostingantwoorden in DEPLOYMENT.md §2 |
