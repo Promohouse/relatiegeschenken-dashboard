@@ -37,6 +37,24 @@ export interface RunResult {
   summary: RunSummary
 }
 
+/**
+ * Capabilities die alleen lezen bij de leverancier.
+ *
+ * Die mogen ook buiten productie tegen de productieomgeving van een
+ * leverancier draaien. De reden dat dat mag: harde regel 18 gaat erover dat
+ * DEV nooit echte klanten raakt - geen mail, geen betaling, geen definitieve
+ * factuur. Een catalogus lezen is niets van dat alles, en zonder deze
+ * uitzondering kun je niet ontwikkelen tegen de enige omgeving waar een
+ * leverancier je toegang toe geeft.
+ *
+ * Alles wat bij de leverancier iets zou kunnen veranderen staat er bewust
+ * niet in. Voor die capabilities bestaat bovendien geen connector (ADR-0013),
+ * dus er zijn twee sloten.
+ */
+const ALLEEN_LEZEN = new Set<ConnectorCapability>([
+  'CATALOG', 'MEDIA', 'PRICE_TIERS', 'INVENTORY',
+])
+
 /** Wat we van onze eigen kant nodig hebben om te vergelijken. */
 interface HuidigProduct {
   id: string
@@ -222,10 +240,10 @@ export class ImportsService {
     }
 
     const omgeving = String((verbinding.config as Record<string, unknown>)?.environment ?? 'test')
-    if (omgeving === 'production' && !this.config.isProduction) {
+    if (omgeving === 'production' && !this.config.isProduction && !ALLEEN_LEZEN.has(capability)) {
       throw new PreconditionError(
-        `De koppeling ${key} wijst naar de productieomgeving van de leverancier, en dit is geen ` +
-          'productieomgeving. Gebruik de testomgeving van de leverancier.',
+        `De koppeling ${key} wijst naar de productieomgeving van de leverancier. Buiten productie ` +
+          `mag daar alleen gelezen worden, en ${capability} is geen leesactie.`,
       )
     }
 

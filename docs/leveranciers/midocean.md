@@ -30,6 +30,43 @@ Twee aandachtspunten die het bouwen raken:
    en geeft dan `503 Service Temporarily Unavailable`. Een nachtelijke import
    tegen test is dus zinloos; dat is geen storing van ons.
 
+### Gemeten tegen de echte API, 28 oktober 2026
+
+De sleutel bleek na activering te werken op **productie**, niet op test. De
+eerste echte import leverde dit op:
+
+| | |
+|---|---|
+| Producten | 2786 artikelen, 21.738 varianten, 36 MB JSON |
+| Prijzen | 21.722 regels, 1,9 MB |
+| Voorraad | 1,8 MB |
+| Drukgegevens | 21 MB |
+| Drukprijzen | 93 KB |
+| Doorlooptijd catalogusimport | 17 seconden |
+
+Drie dingen die de handleiding niet zegt en die wij gemeten hebben:
+
+**1. Grote bestanden komen via een omleiding.** `stock/2.0` antwoordt met een
+`303` en een `preSignedUrl` naar S3; het bestand zelf staat daar. Onze
+connector volgt die omleiding vanzelf, dus het werkt, maar wie de ruwe respons
+bekijkt moet weten dat het antwoord niet de data is.
+
+**2. Staffels zijn er bijna niet.** Van de 21.722 prijsregels hebben er **52**
+een staffel. De handleiding zegt al dat staffels van regio en account
+afhangen; voor dit account betekent het dat vrijwel alles één prijs heeft.
+
+**3. Varianten van hetzelfde artikel verschillen vaker in prijs dan gedacht.**
+Gemeten: **291 van de 2786 artikelen** (ruim 10%) hebben varianten met
+verschillende prijzen. Bij textiel is dat logisch - 3XL kost meer dan M - maar
+het komt ook bij kleuren voor: bij A03643 kost naturel 3,21 en de rest 3,93 of
+4,23.
+
+Dat is hoger dan de uitzondering die ik verwachtte toen de prijsimport
+gebouwd werd. Onze keuze om bij verschil niets te kiezen klopt nog steeds -
+niets is beter dan een verzonnen gemiddelde - maar het betekent wel dat ruim
+tien procent van de artikelen met de hand moet, tot er inkoopprijs per variant
+is. Dat staat nu als afweging in de roadmap in plaats van als terzijde.
+
 ### De 401 zegt niet wát er mis is
 
 Gemeten op 2026-10-28 met een sleutel die net van midocean kwam. Drie
@@ -52,10 +89,10 @@ daarom allebei de oorzaken. Verder is het geen 500: een leverancier die
 weigert is geen storing van ons, dus geeft onze api een 502 met de
 leveranciersmelding erbij.
 
-**Op te lossen aan de kant van de opdrachtgever:** in het midocean-account
-onder *Account > Customer API* de endpoints aanvinken en op Update klikken, en
-bij de contactpersoon navragen of dit een sleutel voor test of voor productie
-is. Die twee zijn niet uitwisselbaar.
+**Opgelost op 28 oktober:** de endpoints waren nog niet aangevinkt in het
+midocean-account. Na activeren werkte de sleutel meteen - op productie. Voor
+`apitest.midocean.com` is nog steeds een aparte sleutel nodig; die is bij de
+contactpersoon op te vragen.
 
 ## Endpoints die wij gebruiken
 
@@ -184,7 +221,8 @@ het product. De kleurcode uit de bestelling heet bij midocean
 
 ## Nog na te vragen bij midocean
 
-1. Bestaat de delta-/wijzigingsfeed voor productinformatie inmiddels?
+1. Bestaat de delta-/wijzigingsfeed voor productinformatie inmiddels? (Nu nog
+   niet te zien aan de respons; 36 MB per keer blijft dus de norm.)
 2. Welke van de twee waarden in Appendix F rij 1 klopt: setup 29,25 of 29,50?
 3. Wordt de handling-prijs werkelijk per positie gerekend?
 4. Zijn er rate limits, en wat gebeurt er bij overschrijding?

@@ -251,6 +251,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- **Lezen uit de productieomgeving van een leverancier mag nu ook buiten
+  productie.** De eerdere regel weigerde dat helemaal. Dat bleek te streng: een
+  catalogus lezen raakt geen klant, geen betaling en geen factuur — waar harde
+  regel 18 over gaat — en midocean geeft alleen een productiesleutel uit
+  zolang er geen testsleutel is aangevraagd. Alles wat bij de leverancier iets
+  zou kunnen veranderen blijft geweigerd, en daar bestaat bovendien geen
+  connector voor.
 - **De inkoop van drukwerk telt mee in de marge.** De regelberekening nam
   alleen de inkoopprijs van het artikel mee; de kosten van bedrukken telden
   wel in de verkoop maar niet in de inkoop. Daardoor viel de marge te hoog uit,

@@ -808,19 +808,41 @@ describe('importpijplijn', () => {
     })
 
     it('weigert een capability die de koppeling niet heeft', async () => {
-      const res = await start({ capability: 'SHIPPING' }).expect(422)
-      expect(res.body.error.message).toContain('heeft geen SHIPPING')
+      const res = await start({ capability: 'ORDER_STATUS' }).expect(422)
+      expect(res.body.error.message).toContain('heeft geen ORDER_STATUS')
     })
 
-    it('weigert een productiesleutel op een niet-productieomgeving', async () => {
+    it('laat lezen uit de productieomgeving van de leverancier toe', async () => {
+      // Een catalogus lezen raakt geen klant, geen betaling en geen factuur.
+      // Zonder dit kun je niet ontwikkelen tegen de enige omgeving waar een
+      // leverancier toegang toe geeft - zoals bij midocean het geval is.
       await prisma.unscoped.supplierConnection.update({
         where: { id: connectionId },
         data: { config: { environment: 'production' } },
       })
       try {
-        const res = await start({ dryRun: true }).expect(422)
-        expect(res.body.error.message).toContain('productieomgeving van de leverancier')
+        await start({ dryRun: true }).expect(201)
       } finally {
+        await prisma.unscoped.supplierConnection.update({
+          where: { id: connectionId },
+          data: { config: { environment: 'test', language: 'nl' } },
+        })
+      }
+    })
+
+    it('weigert wel een niet-leesactie tegen productie', async () => {
+      await prisma.unscoped.supplierConnection.update({
+        where: { id: connectionId },
+        data: { config: { environment: 'production' } },
+      })
+      const cap = await prisma.unscoped.supplierConnectionCapability.create({
+        data: { connectionId, capability: 'SHIPPING', priority: 10 },
+      })
+      try {
+        const res = await start({ capability: 'SHIPPING', dryRun: true }).expect(422)
+        expect(res.body.error.message).toContain('is geen leesactie')
+      } finally {
+        await prisma.unscoped.supplierConnectionCapability.delete({ where: { id: cap.id } })
         await prisma.unscoped.supplierConnection.update({
           where: { id: connectionId },
           data: { config: { environment: 'test', language: 'nl' } },
