@@ -1,16 +1,19 @@
 import { Injectable } from '@nestjs/common'
 import type { Prisma } from '@rgh/db'
-import type {
-  CreateCustomer, CustomerDetail, ListCustomersQuery, PaginatedCustomers, UpdateCustomer,
+import {
+  describePaymentTerm,
+  type CreateCustomer, type CustomerDetail, type ListCustomersQuery,
+  type PaginatedCustomers, type UpdateCustomer,
 } from '@rgh/contracts'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { AuditService } from '../../core/audit/audit.service'
 import { NumberingService } from '../../core/numbering/numbering.service'
 import { NotFoundError } from '../../core/errors/domain-errors'
+import { PaymentTermsService } from '../payment-terms/payment-terms.service'
 
 /** Velden waarvan een wijziging in het auditlog terechtkomt. */
 const GEVOLGDE_VELDEN = [
-  'name', 'vatNumber', 'email', 'phone', 'website', 'notes', 'isActive',
+  'name', 'vatNumber', 'email', 'phone', 'website', 'notes', 'isActive', 'paymentTermId',
 ] as const
 
 @Injectable()
@@ -19,6 +22,7 @@ export class CustomersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly numbering: NumberingService,
+    private readonly paymentTerms: PaymentTermsService,
   ) {}
 
   async list(query: ListCustomersQuery): Promise<PaginatedCustomers> {
@@ -95,6 +99,7 @@ export class CustomersService {
     const klant = await this.prisma.db.customer.findUnique({
       where: { id },
       include: {
+        paymentTerm: true,
         contacts: { orderBy: [{ isPrimary: 'desc' }, { lastName: 'asc' }] },
         addresses: { orderBy: [{ type: 'asc' }, { isDefault: 'desc' }] },
         _count: {
@@ -110,6 +115,23 @@ export class CustomersService {
 
     const afleveradres = klant.addresses.find((a) => a.type === 'DELIVERY' && a.isDefault)
 
+    // Geen eigen voorwaarde betekent: de standaard geldt. Het scherm hoort te
+    // tonen wat er werkelijk gebeurt, niet een leeg veld.
+    const standaard = klant.paymentTerm ? null : await this.paymentTerms.defaultTerm()
+    const voorwaarde = klant.paymentTerm
+      ? {
+          name: klant.paymentTerm.name,
+          description: describePaymentTerm({
+            days: klant.paymentTerm.days,
+            endOfMonth: klant.paymentTerm.endOfMonth,
+            prepaymentPercent: klant.paymentTerm.prepaymentPercent?.toString() ?? null,
+            invoiceText: klant.paymentTerm.invoiceText,
+          }),
+        }
+      : standaard
+        ? { name: standaard.name, description: standaard.description }
+        : null
+
     return {
       id: klant.id,
       number: klant.number,
@@ -124,6 +146,10 @@ export class CustomersService {
       vatNumber: klant.vatNumber,
       website: klant.website,
       notes: klant.notes,
+      paymentTermId: klant.paymentTermId,
+      paymentTermName: voorwaarde?.name ?? null,
+      paymentTermDescription: voorwaarde?.description ?? null,
+      paymentTermIsDefault: klant.paymentTermId === null,
       createdAt: klant.createdAt.toISOString(),
       updatedAt: klant.updatedAt.toISOString(),
       contacts: klant.contacts.map((c) => ({
@@ -140,6 +166,8 @@ export class CustomersService {
   }
 
   async create(input: CreateCustomer): Promise<CustomerDetail> {
+    if (input.paymentTermId) await this.paymentTerms.mustBeSelectable(input.paymentTermId)
+
     // Nummer en klant in één transactie: anders raakt een nummer kwijt als het
     // aanmaken daarna faalt.
     const klant = await this.prisma.unscoped.$transaction(async (tx) => {
@@ -160,6 +188,7 @@ export class CustomersService {
   async update(id: string, input: UpdateCustomer): Promise<CustomerDetail> {
     const voor = await this.prisma.db.customer.findUnique({ where: { id } })
     if (!voor) throw new NotFoundError('Deze klant bestaat niet of is niet voor jou zichtbaar.')
+    if (input.paymentTermId) await this.paymentTerms.mustBeSelectable(input.paymentTermId)
 
     const na = await this.prisma.db.customer.update({ where: { id }, data: input })
 

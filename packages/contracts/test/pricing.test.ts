@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   applicableRules, selectPriceRule, applyPriceRule, calculateUnitSalePrice, selectTier,
-  type PriceRule, type PriceContext,
+  selectCustomerAgreement,
+  type PriceRule, type PriceContext, type CustomerPriceAgreement,
 } from '../src/pricing'
 
 const regel = (over: Partial<PriceRule> & Pick<PriceRule, 'id' | 'scope'>): PriceRule => ({
@@ -113,6 +114,10 @@ describe('prijs berekenen', () => {
     expect(uitkomst.unitPrice.toFixed(4)).toBe('10.1850')
     expect(uitkomst.marginAmount.toFixed(4)).toBe('5.3350')
     expect(uitkomst.marginPercent.toFixed(2)).toBe('52.38')
+    expect(uitkomst.source).toBe('RULE')
+    // Narrowing op source: de union laat de regel pas lezen als die ook de
+    // prijs bepaalde.
+    if (uitkomst.source !== 'RULE') throw new Error('bron hoort RULE te zijn')
     expect(uitkomst.rule.id).toBe('m')
   })
 
@@ -146,5 +151,113 @@ describe('inkoopstaffels', () => {
 
   it('geeft null als geen enkele staffel het aantal haalt', () => {
     expect(selectTier([{ minQuantity: 50, unitPrice: '1' }], 25)).toBeNull()
+  })
+})
+
+// --- Klantprijsafspraken ---------------------------------------------------
+
+const afspraak = (
+  over: Partial<CustomerPriceAgreement> & Pick<CustomerPriceAgreement, 'id'>,
+): CustomerPriceAgreement => ({
+  customerId: 'k1',
+  productId: 'p1',
+  minQuantity: 1,
+  unitPrice: '7.0000',
+  isActive: true,
+  ...over,
+})
+
+describe('welke klantafspraak geldt', () => {
+  it('kiest de hoogste drempel die het aantal haalt', () => {
+    const afspraken = [
+      afspraak({ id: 'vanaf1', minQuantity: 1, unitPrice: '9.0000' }),
+      afspraak({ id: 'vanaf100', minQuantity: 100, unitPrice: '8.0000' }),
+      afspraak({ id: 'vanaf500', minQuantity: 500, unitPrice: '7.0000' }),
+    ]
+    expect(selectCustomerAgreement(afspraken, context({ quantity: 250 }))?.id).toBe('vanaf100')
+    expect(selectCustomerAgreement(afspraken, context({ quantity: 99 }))?.id).toBe('vanaf1')
+    expect(selectCustomerAgreement(afspraken, context({ quantity: 500 }))?.id).toBe('vanaf500')
+  })
+
+  it('kijkt niet naar afspraken van een andere klant of een ander product', () => {
+    const afspraken = [
+      afspraak({ id: 'andere-klant', customerId: 'k2' }),
+      afspraak({ id: 'ander-product', productId: 'p2' }),
+    ]
+    expect(selectCustomerAgreement(afspraken, context())).toBeNull()
+  })
+
+  it('negeert een afspraak buiten haar geldigheidsvenster', () => {
+    const verlopen = afspraak({ id: 'verlopen', validTo: new Date('2026-01-01T00:00:00Z') })
+    const toekomst = afspraak({ id: 'toekomst', validFrom: new Date('2027-01-01T00:00:00Z') })
+    const nu = context({ at: new Date('2026-06-01T00:00:00Z') })
+    expect(selectCustomerAgreement([verlopen], nu)).toBeNull()
+    expect(selectCustomerAgreement([toekomst], nu)).toBeNull()
+    expect(selectCustomerAgreement([toekomst], context({ at: new Date('2027-02-01T00:00:00Z') }))?.id)
+      .toBe('toekomst')
+  })
+
+  it('negeert een afspraak die op inactief staat', () => {
+    expect(selectCustomerAgreement([afspraak({ id: 'uit', isActive: false })], context())).toBeNull()
+  })
+
+  it('kiest bij een gelijke drempel de laagste prijs', () => {
+    // Twee afspraken vanaf hetzelfde aantal horen niet te bestaan - de
+    // database verbiedt het - maar als het toch gebeurt valt het niet in ons
+    // voordeel uit.
+    const afspraken = [
+      afspraak({ id: 'duur', minQuantity: 100, unitPrice: '9.0000' }),
+      afspraak({ id: 'goedkoop', minQuantity: 100, unitPrice: '8.5000' }),
+    ]
+    expect(selectCustomerAgreement(afspraken, context({ quantity: 100 }))?.id).toBe('goedkoop')
+  })
+
+  it('doet niets zonder klant in de context', () => {
+    expect(selectCustomerAgreement([afspraak({ id: 'a' })], context({ customerId: null }))).toBeNull()
+  })
+})
+
+describe('afspraak tegen prijsregel', () => {
+  it('laat de afspraak voorgaan op elke regel, ook een scherpere klantregel', () => {
+    const rules = [
+      regel({ id: 'klant', scope: 'CUSTOMER', customerId: 'k1', marginPercent: 20, priority: 1 }),
+      regel({ id: 'algemeen', scope: 'GLOBAL', marginPercent: 100, priority: 1 }),
+    ]
+    const uitkomst = calculateUnitSalePrice('4.8500', rules, context(), [
+      afspraak({ id: 'jaarafspraak', unitPrice: '8.2500' }),
+    ])!
+
+    expect(uitkomst.source).toBe('AGREEMENT')
+    if (uitkomst.source !== 'AGREEMENT') throw new Error('bron hoort AGREEMENT te zijn')
+    expect(uitkomst.agreement.id).toBe('jaarafspraak')
+    expect(uitkomst.unitPrice.toFixed(4)).toBe('8.2500')
+    // De marge wordt nog steeds tegen de inkoopprijs gerekend, anders weet
+    // niemand wat de afspraak kost.
+    expect(uitkomst.marginAmount.toFixed(4)).toBe('3.4000')
+    expect(uitkomst.belowCost).toBe(false)
+  })
+
+  it('valt terug op de regel als de afspraak niet geldt', () => {
+    const rules = [regel({ id: 'algemeen', scope: 'GLOBAL', marginPercent: 100 })]
+    const uitkomst = calculateUnitSalePrice('4.0000', rules, context({ quantity: 50 }), [
+      afspraak({ id: 'vanaf100', minQuantity: 100, unitPrice: '5.0000' }),
+    ])!
+    expect(uitkomst.source).toBe('RULE')
+    expect(uitkomst.unitPrice.toFixed(4)).toBe('8.0000')
+  })
+
+  it('geeft een prijs onder de inkoopprijs door, maar meldt het', () => {
+    // Verliesgevend verkopen mag een zakelijke keuze zijn; stil gebeuren niet.
+    const uitkomst = calculateUnitSalePrice('10.0000', [], context(), [
+      afspraak({ id: 'te-scherp', unitPrice: '8.0000' }),
+    ])!
+    expect(uitkomst.belowCost).toBe(true)
+    expect(uitkomst.marginAmount.toFixed(4)).toBe('-2.0000')
+  })
+
+  it('geeft een prijs ook zonder enige regel, als er een afspraak is', () => {
+    // Zonder afspraak is geen regel een fout; met afspraak is er een bedrag.
+    expect(calculateUnitSalePrice('4.0000', [], context())).toBeNull()
+    expect(calculateUnitSalePrice('4.0000', [], context(), [afspraak({ id: 'a' })])).not.toBeNull()
   })
 })

@@ -6,6 +6,25 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **Betalingsvoorwaarden.** Een gedeelde lijst (`30 dagen netto`, `einde maand
+  plus 30`, `50% vooruit`) waaruit klanten kiezen, met hoogstens één standaard,
+  afgedwongen door een partiele unieke index in de database. De
+  vervaldatum en de aanbetaling worden berekend in `@rgh/contracts`, in UTC en
+  per dag, zodat de overgang naar zomertijd de vervaldag niet verschuift. Een
+  voorwaarde die klanten hebben kan niet weg en niet op inactief; de standaard
+  kan niet uitgezet worden zonder een andere aan te wijzen.
+- **Klantprijsafspraken.** Een afgesproken bedrag per stuk vanaf een aantal,
+  met staffel en geldigheidsvenster. Een afspraak gaat vóór op elke prijsregel,
+  ongeacht `priority`: een toezegging is geen rekenvoorkeur. Ligt de afspraak
+  onder de inkoopprijs, dan wordt de prijs gewoon gebruikt maar draagt de
+  uitkomst `belowCost`, zodat verliesgevend verkopen een keuze is en geen
+  ongeluk. In het klantscherm staat per afspraak of hij vandaag meedoet, via
+  dezelfde functie die de calculatie gebruikt.
+- Begin van de productmodule: producten zoeken op artikelnummer of naam, voor
+  de productkiezer in het afsprakenformulier. Volledig productbeheer is Fase 2;
+  deze service bestaat nu al zodat de klantmodule niet in de producttabel hoeft
+  te kijken (harde regel 1).
+
 - Rollen bewerken vanuit het scherm: een raster van module tegen actie, met
   per module een "alles aan/uit", en een teller die zegt hoeveel van de 84
   rechten aanstaan. Daarmee is "rechten configureerbaar zonder nieuwe versie
@@ -117,3 +136,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 - ADR-0001 t/m ADR-0005: architectuurbesluiten vastgelegd.
 - Onderzoek naar koppelmogelijkheden van midocean, Toppoint, PF Concept,
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
+
+### Gewijzigd
+- **Wijzigingsschema's laten weggelaten velden nu echt weg.** `.partial()` in
+  Zod maakt een veld optioneel maar laat `.default()` staan: een PATCH met
+  alleen een naam zette daardoor ook `endOfMonth`, `sort` en de standaardvlag
+  terug op hun beginwaarde. Dat haalde in de test de standaard onder een
+  betalingsvoorwaarde vandaan. De wijzigingsschema's staan nu met de hand
+  uitgeschreven, met een test die het vastlegt.
+- **Een geschonden check-constraint geeft 422 in plaats van 500.** Een einddatum
+  vóór de begindatum leverde een serverfout op; nu komt er een melding bij het
+  veld, met de databasecontrole als achtervang. De naam van de constraint gaat
+  het logboek in, niet het antwoord.

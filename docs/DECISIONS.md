@@ -163,7 +163,19 @@ dezelfde route die ik toen als eerste connector adviseerde: bestandsimport
 werkt vandaag, zonder credentials, en blijft de oplossing voor Clipper en
 Toppoint. Geen nieuw besluit nodig, wel een verschuiving in de planning.
 
-### D-11 — Voorrang tussen prijsregels *(aanname, graag bevestigen)*
+### D-11 — Voorrang tussen prijsregels *(deels beslist in code)*
+
+**Een klantprijsafspraak gaat altijd voor op elke prijsregel.** Dat is geen
+aanname meer maar gebouwd gedrag: een afspraak is een toegezegd bedrag, een
+regel is een rekenvoorkeur. Zouden afspraken via `priority` meedoen, dan kan
+een verkeerd ingestelde algemene regel een commerciele toezegging overrulen en
+merkt niemand dat tot de klant de factuur ziet. Een verliesgevende afspraak
+wordt wel uitgevoerd, maar de uitkomst draagt `belowCost` zodat het scherm het
+kan laten zien.
+
+Wat hieronder staat gaat alleen over de onderlinge ordening van *marge-regels*
+en is nog steeds een aanname:
+
 
 De prijsengine kiest welke regel geldt. **`priority` is de knop**: de laagste
 waarde wint, en dat is expliciet instelbaar per regel. Specificiteit is

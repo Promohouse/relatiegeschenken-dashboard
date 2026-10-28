@@ -118,6 +118,35 @@ async function seedBaseData() {
     })
   }
 
+  // Betalingsvoorwaarden. Precies een standaard; een partiele unieke index in
+  // de database laat niet meer dan een toe.
+  const paymentTerms = [
+    { key: 'net_14', name: '14 dagen netto', days: 14, endOfMonth: false, sort: 10 },
+    { key: 'net_30', name: '30 dagen netto', days: 30, endOfMonth: false, sort: 20, isDefault: true },
+    { key: 'net_60', name: '60 dagen netto', days: 60, endOfMonth: false, sort: 30 },
+    { key: 'eom_30', name: 'Einde maand plus 30 dagen', days: 30, endOfMonth: true, sort: 40 },
+    {
+      key: 'prepaid_50', name: '50% vooruit, rest 14 dagen', days: 14, endOfMonth: false, sort: 50,
+      prepaymentPercent: '50.00',
+      invoiceText: '50% vooruitbetaling, het restant binnen 14 dagen na levering.',
+    },
+    {
+      key: 'prepaid_100', name: 'Volledig vooruit', days: 0, endOfMonth: false, sort: 60,
+      prepaymentPercent: '100.00',
+      invoiceText: 'Levering na ontvangst van de volledige betaling.',
+    },
+  ]
+  for (const t of paymentTerms) {
+    const { key, isDefault, ...rest } = t
+    await prisma.paymentTerm.upsert({
+      where: { key },
+      // isDefault staat niet in de update: wie de standaard in het scherm
+      // heeft verlegd, wil niet dat een seed dat terugdraait.
+      update: rest,
+      create: { key, ...rest, isDefault: isDefault ?? false },
+    })
+  }
+
   // Nummerreeksen. Formaat en startwaarde zijn later te wijzigen via
   // Instellingen, ook als er al nummers zijn uitgegeven.
   const sequences = [
@@ -164,7 +193,7 @@ async function seedBaseData() {
     await prisma.printMethod.upsert({ where: { key: m.key }, update: { name: m.name }, create: m })
   }
 
-  console.log(`  basisgegevens: ${vatRates.length} btw-tarieven, ${settings.length} instellingen, ${sequences.length} nummerreeksen, ${printMethods.length} bedrukkingstechnieken, ${printPositions.length} bedrukposities`)
+  console.log(`  basisgegevens: ${vatRates.length} btw-tarieven, ${settings.length} instellingen, ${sequences.length} nummerreeksen, ${printMethods.length} bedrukkingstechnieken, ${printPositions.length} bedrukposities, ${paymentTerms.length} betalingsvoorwaarden`)
 }
 
 // --- Demogegevens ----------------------------------------------------------
@@ -381,6 +410,46 @@ async function seedDemoQuotesAndOrders(users: { id: string; email: string }[]) {
     where: { isDemo: true },
     include: { suppliers: { include: { supplier: true } }, printOptions: { include: { printMethod: true } } },
   })
+
+  // Een jaarafspraak bij de eerste demoklant, met een staffel. Toont in het
+  // scherm het verschil tussen een afspraak en een prijsregel: deze bedragen
+  // gaan voor, ook als een algemene regel hoger uitkomt.
+  const afspraakKlant = customers[0]
+  const afspraakProduct = products[0]
+  if (afspraakKlant && afspraakProduct) {
+    const eomTermijn = await prisma.paymentTerm.findUnique({ where: { key: 'eom_30' } })
+    if (eomTermijn && afspraakKlant.paymentTermId === null) {
+      await prisma.customer.update({
+        where: { id: afspraakKlant.id },
+        data: { paymentTermId: eomTermijn.id },
+      })
+    }
+
+    for (const afspraak of [
+      { minQuantity: 100, unitPrice: '7.9500' },
+      { minQuantity: 500, unitPrice: '7.2500' },
+      { minQuantity: 1000, unitPrice: '6.8000' },
+    ]) {
+      await prisma.customerPriceAgreement.upsert({
+        where: {
+          customerId_productId_minQuantity: {
+            customerId: afspraakKlant.id,
+            productId: afspraakProduct.id,
+            minQuantity: afspraak.minQuantity,
+          },
+        },
+        update: {},
+        create: {
+          customerId: afspraakKlant.id,
+          productId: afspraakProduct.id,
+          minQuantity: afspraak.minQuantity,
+          unitPrice: afspraak.unitPrice,
+          note: 'Jaarafspraak 2026, vastgelegd per mail.',
+          ...demo,
+        },
+      })
+    }
+  }
 
   // Eén offerte blijft bij de klant liggen, twee worden geaccepteerd.
   const plans = [

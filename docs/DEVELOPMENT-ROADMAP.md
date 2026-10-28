@@ -45,7 +45,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | Contactpersonen beheren | toevoegen, wijzigen, op inactief zetten; hoogstens één hoofdcontact per klant |
 | ✅ | Adressen beheren | toevoegen, wijzigen, verwijderen als het adres nergens gebruikt wordt; één standaardadres per soort; Nederlandse postcodes genormaliseerd |
 | ✅ | Klanten aanmaken en wijzigen | formulier met foutmeldingen bij het veld zelf, op inactief zetten met bevestiging, knoppen alleen zichtbaar met het juiste recht |
-| ◻ | Betalingsvoorwaarden en klantprijzen | een klantprijs gaat voor op de algemene prijsregel, aangetoond met een test |
+| ✅ | Betalingsvoorwaarden en klantprijzen | gereed: betalingsvoorwaarden als gedeelde lijst met hoogstens één standaard, vervaldatum en aanbetaling berekend in `@rgh/contracts`; klantprijsafspraken met staffel die vóór elke prijsregel gaan, aangetoond tegen de echte database |
 | ✅ | Gebruikersbeheer | aanmaken met beginwachtwoord en rollen, wijzigen, op inactief zetten; zelfregistratie geblokkeerd; niemand kan zichzelf of iedereen buitensluiten |
 | ✅ | Rollen bewerken | rechten per module en actie aanpasbaar in een raster, met "alles aan/uit" per module; systeemrollen wel aanpasbaar, niet verwijderbaar; een rol die iemand heeft kan niet weg |
 | ◻ | Klantgebruikers met klantrollen | alleen een goedkeurder kan goedkeuren; test op de andere rollen |

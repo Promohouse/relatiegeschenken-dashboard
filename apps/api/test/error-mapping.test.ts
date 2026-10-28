@@ -94,6 +94,20 @@ describe('onbekende fouten', () => {
     expect(m.internal).toContain('ECONNREFUSED')
   })
 
+  it('maakt van een geschonden check-constraint een 422 in plaats van een 500', () => {
+    const m = mapError(
+      new Error(
+        'new row for relation "customer_price_agreements" violates check constraint ' +
+          '"customer_price_agreements_geldigheid"',
+      ),
+    )
+    expect(m.status).toBe(422)
+    expect(m.code).toBe('REGEL_GESCHONDEN')
+    // De naam van de constraint zegt een gebruiker niets en blijft intern.
+    expect(m.message).not.toContain('customer_price_agreements_geldigheid')
+    expect(m.internal).toContain('customer_price_agreements_geldigheid')
+  })
+
   it('kan ook met iets dat geen Error is omgaan', () => {
     expect(mapError('kapot').status).toBe(500)
     expect(mapError(undefined).status).toBe(500)

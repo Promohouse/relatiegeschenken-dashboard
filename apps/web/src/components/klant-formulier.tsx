@@ -13,9 +13,20 @@ export interface KlantWaarden {
   phone: string
   website: string
   notes: string
+  paymentTermId: string
 }
 
-const LEEG: KlantWaarden = { name: '', vatNumber: '', email: '', phone: '', website: '', notes: '' }
+const LEEG: KlantWaarden = {
+  name: '', vatNumber: '', email: '', phone: '', website: '', notes: '', paymentTermId: '',
+}
+
+/** Alleen wat de keuzelijst nodig heeft; de rest is beheer. */
+export interface Betaalkeuze {
+  id: string
+  name: string
+  description: string
+  isDefault: boolean
+}
 
 function Veld({
   naam, label, waarde, fout, hint, type = 'text', onChange,
@@ -59,9 +70,11 @@ function Veld({
 export function KlantFormulier({
   klantId,
   begin = LEEG,
+  betaaltermijnen = [],
 }: {
   klantId?: string
   begin?: KlantWaarden
+  betaaltermijnen?: Betaalkeuze[]
 }) {
   const router = useRouter()
   const [waarden, setWaarden] = useState<KlantWaarden>(begin)
@@ -70,6 +83,7 @@ export function KlantFormulier({
   const [bezig, setBezig] = useState(false)
 
   const nieuw = !klantId
+  const standaard = betaaltermijnen.find((t) => t.isDefault)
   const zet = (veld: keyof KlantWaarden) => (waarde: string) =>
     setWaarden((v) => ({ ...v, [veld]: waarde }))
 
@@ -130,6 +144,37 @@ export function KlantFormulier({
         <Veld naam="phone" label="Telefoon" waarde={waarden.phone} fout={fouten.phone} onChange={zet('phone')} />
         <Veld naam="email" label="E-mailadres" type="email" waarde={waarden.email} fout={fouten.email} onChange={zet('email')} />
         <Veld naam="website" label="Website" waarde={waarden.website} fout={fouten.website} onChange={zet('website')} />
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="paymentTermId" className="text-sm font-medium text-ink-soft">
+            Betalingsvoorwaarde
+          </label>
+          <select
+            id="paymentTermId"
+            name="paymentTermId"
+            value={waarden.paymentTermId}
+            onChange={(e) => zet('paymentTermId')(e.target.value)}
+            aria-invalid={fouten.paymentTermId ? true : undefined}
+            className="h-9 w-full rounded border border-rule bg-surface px-2 text-sm text-ink focus:border-accent focus:outline-none"
+          >
+            <option value="">
+              Standaard
+              {standaard ? ` (${standaard.name})` : ''}
+            </option>
+            {betaaltermijnen.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} — {t.description}
+              </option>
+            ))}
+          </select>
+          {fouten.paymentTermId ? (
+            <p className="text-xs text-alarm">{fouten.paymentTermId}</p>
+          ) : (
+            <p className="text-xs text-ink-faint">
+              Niets kiezen betekent: de standaard volgen, ook als die later wijzigt.
+            </p>
+          )}
+        </div>
 
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <label htmlFor="notes" className="text-sm font-medium text-ink-soft">

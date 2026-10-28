@@ -1,11 +1,16 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Mail, MapPin, Phone, User } from 'lucide-react'
-import type { CustomerDetail } from '@rgh/contracts'
+import { ArrowLeft, Mail, MapPin, Phone, Tag, User } from 'lucide-react'
+import type { CustomerDetail, PriceAgreementView } from '@rgh/contracts'
+import { formatEuro } from '@rgh/contracts'
 import { apiGet, ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { KlantStatusKnop } from '@/components/klant-status-knop'
 import { getCurrentUser, mag } from '@/lib/session'
+
+/** Een datum zoals een Nederlander hem leest. */
+const datum = (iso: string) =>
+  new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })
 
 const ADRESSOORT: Record<string, string> = {
   INVOICE: 'Factuuradres',
@@ -33,6 +38,8 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
     if (error instanceof ApiError && error.status === 404) notFound()
     throw error
   }
+
+  const afspraken = await apiGet<PriceAgreementView[]>(`/api/customers/${id}/prices`)
 
   return (
     <div className="max-w-5xl">
@@ -100,6 +107,19 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
             </Veld>
             <Veld label="Telefoon">{klant.phone ?? '—'}</Veld>
             <Veld label="Website">{klant.website ?? '—'}</Veld>
+            <Veld label="Betalingsvoorwaarde">
+              {klant.paymentTermName ? (
+                <>
+                  {klant.paymentTermName}
+                  {klant.paymentTermIsDefault && (
+                    <span className="text-ink-faint"> (standaard)</span>
+                  )}
+                  <span className="block text-xs text-ink-faint">{klant.paymentTermDescription}</span>
+                </>
+              ) : (
+                <span className="text-alarm">Nog geen standaard ingesteld</span>
+              )}
+            </Veld>
           </dl>
         </section>
 
@@ -211,6 +231,91 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
           </ul>
         </section>
       </div>
+
+      <section className="mt-5 rounded border border-rule bg-surface p-5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Tag size={14} aria-hidden className="text-ink-faint" />
+            Prijsafspraken
+          </h2>
+          {mag(user, 'customers:update') && (
+            <Link
+              href={`/klanten/${klant.id}/prijsafspraken/nieuw`}
+              className="text-xs font-medium text-accent hover:underline"
+            >
+              Toevoegen
+            </Link>
+          )}
+        </div>
+
+        {afspraken.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-faint">
+            Geen prijsafspraken. De calculatie gebruikt dan de algemene prijsregels.
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-rule text-left">
+                  {['Product', 'Vanaf', 'Prijs per stuk', 'Geldig', 'Status'].map((k) => (
+                    <th key={k} className="pb-2 pr-4 text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      {k}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {afspraken.map((a) => (
+                  <tr key={a.id} className="border-b border-rule last:border-0">
+                    <td className="py-2 pr-4">
+                      {mag(user, 'customers:update') ? (
+                        <Link
+                          href={`/klanten/${klant.id}/prijsafspraken/${a.id}`}
+                          className="hover:text-accent"
+                        >
+                          {a.productName}
+                        </Link>
+                      ) : (
+                        a.productName
+                      )}
+                      <span className="block font-[family-name:var(--font-mono)] text-xs text-ink-faint">
+                        {a.productArticleNumber}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 tabular">{a.minQuantity}</td>
+                    <td className="py-2 pr-4 tabular">{formatEuro(a.unitPrice)}</td>
+                    <td className="py-2 pr-4 text-xs text-ink-soft">
+                      {a.validFrom || a.validTo ? (
+                        <>
+                          {a.validFrom ? datum(a.validFrom) : 'altijd'}
+                          {' – '}
+                          {a.validTo ? datum(a.validTo) : 'open'}
+                        </>
+                      ) : (
+                        'onbeperkt'
+                      )}
+                    </td>
+                    <td className="py-2">
+                      {a.appliesToday ? (
+                        <Badge tone="ok">geldt nu</Badge>
+                      ) : a.isActive ? (
+                        <Badge tone="wait">buiten de periode</Badge>
+                      ) : (
+                        <Badge tone="rest">uitgezet</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <p className="mt-3 text-xs text-ink-faint">
+          Een afspraak gaat vóór op elke algemene prijsregel. Bij meerdere drempels geldt de hoogste
+          die het aantal haalt.
+        </p>
+      </section>
 
       {klant.notes && (
         <section className="mt-5 rounded border border-rule bg-surface p-5">

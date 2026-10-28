@@ -1,6 +1,6 @@
 import {
   Building2, ClipboardList, FileText, Folder, LayoutDashboard, Package,
-  Truck, CheckSquare, Settings, Users, ShieldCheck,
+  Truck, CheckSquare, Settings, Users, ShieldCheck, Receipt,
 } from 'lucide-react'
 import { NavLink } from './nav-link'
 import { LogoutButton } from './logout-button'
@@ -16,6 +16,10 @@ const GEBOUWD = [
   { href: '/klanten', label: 'Klanten', icon: Building2, permissie: 'customers:view' },
   { href: '/beheer/gebruikers', label: 'Gebruikers', icon: Users, permissie: 'users:view' },
   { href: '/beheer/rollen', label: 'Rollen', icon: ShieldCheck, permissie: 'users:view' },
+  {
+    href: '/beheer/betalingsvoorwaarden', label: 'Betalingsvoorwaarden',
+    icon: Receipt, permissie: 'settings:view',
+  },
 ]
 
 const NOG_NIET = [

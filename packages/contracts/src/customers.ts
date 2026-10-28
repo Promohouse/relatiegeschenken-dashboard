@@ -51,6 +51,8 @@ export const createCustomerSchema = z.object({
   website: leegNaarNull(z.string().trim().max(200)).optional(),
   /// Interne opmerkingen; nooit zichtbaar in het klantportaal.
   notes: leegNaarNull(z.string().trim().max(5000)).optional(),
+  /// Leeg betekent: de standaard betalingsvoorwaarde.
+  paymentTermId: leegNaarNull(z.string().uuid('Kies een geldige betalingsvoorwaarde')).optional(),
 })
 
 export const updateCustomerSchema = createCustomerSchema.partial()
@@ -108,6 +110,12 @@ export const customerDetailSchema = customerSummarySchema.extend({
   vatNumber: z.string().nullable(),
   website: z.string().nullable(),
   notes: z.string().nullable(),
+  paymentTermId: z.string().nullable(),
+  /// Naam van de voorwaarde die geldt, met tussen haakjes of dat de standaard
+  /// is. Null alleen als er helemaal geen standaard is ingesteld.
+  paymentTermName: z.string().nullable(),
+  paymentTermDescription: z.string().nullable(),
+  paymentTermIsDefault: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
   contacts: z.array(customerContactSchema),

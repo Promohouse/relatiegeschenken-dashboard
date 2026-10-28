@@ -136,7 +136,10 @@ describe('klantisolatie', () => {
 
   it('dekt de modellen die klantgegevens dragen', () => {
     // Een model dat hier ontbreekt terwijl het klantgegevens draagt is een lek.
-    for (const model of ['customer', 'order', 'orderLine', 'quote', 'document', 'task', 'shipment']) {
+    for (const model of [
+      'customer', 'order', 'orderLine', 'quote', 'document', 'task', 'shipment',
+      'customerPriceAgreement',
+    ]) {
       expect(klantgebondenModellen).toContain(model)
     }
   })

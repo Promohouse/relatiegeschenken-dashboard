@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
-import type { CustomerDetail } from '@rgh/contracts'
+import type { CustomerDetail, PaymentTermView } from '@rgh/contracts'
 import { ApiError, apiGet } from '@/lib/api'
 import { KlantFormulier } from '@/components/klant-formulier'
 import { getCurrentUser, mag } from '@/lib/session'
@@ -10,6 +10,8 @@ export default async function KlantBewerken({ params }: { params: Promise<{ id: 
   const { id } = await params
   const user = await getCurrentUser()
   if (!mag(user, 'customers:update')) redirect(`/klanten/${id}`)
+
+  const termen = await apiGet<PaymentTermView[]>('/api/payment-terms/selectable')
 
   let klant: CustomerDetail
   try {
@@ -39,7 +41,9 @@ export default async function KlantBewerken({ params }: { params: Promise<{ id: 
           phone: klant.phone ?? '',
           website: klant.website ?? '',
           notes: klant.notes ?? '',
+          paymentTermId: klant.paymentTermId ?? '',
         }}
+        betaaltermijnen={termen}
       />
     </div>
   )

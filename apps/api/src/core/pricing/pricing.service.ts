@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
   applicableRules, calculateUnitSalePrice, selectTier,
-  type PriceContext, type PriceRule, type PriceResult,
+  type PriceContext, type PriceRule, type PriceResult, type CustomerPriceAgreement,
 } from '@rgh/contracts'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotFoundError, PreconditionError } from '../errors/domain-errors'
@@ -19,7 +19,12 @@ export interface PriceRequest {
   at?: Date
 }
 
-export interface PriceBreakdown extends PriceResult {
+/**
+ * Een intersectie en geen `extends`: `PriceResult` is een union op `source`,
+ * en die eigenschap moet behouden blijven. Zo kan de aanroeper de regel of de
+ * afspraak pas uitlezen nadat hij op `source` heeft gekeken.
+ */
+export type PriceBreakdown = PriceResult & {
   productId: string
   quantity: number
   supplierId: string | null
@@ -94,8 +99,11 @@ export class PricingService {
       at: request.at,
     }
 
-    const regels = await this.laadRegels(context)
-    const uitkomst = calculateUnitSalePrice(inkoopprijs, regels, context)
+    const [regels, afspraken] = await Promise.all([
+      this.laadRegels(context),
+      this.laadAfspraken(context),
+    ])
+    const uitkomst = calculateUnitSalePrice(inkoopprijs, regels, context, afspraken)
 
     if (!uitkomst) {
       throw new PreconditionError(
@@ -114,6 +122,34 @@ export class PricingService {
       tierMinQuantity: staffel?.minQuantity ?? null,
       consideredRuleIds: applicableRules(regels, context).map((r) => r.id),
     }
+  }
+
+  /**
+   * De klantprijsafspraken voor dit product. Een afspraak gaat voor op elke
+   * prijsregel; de voorrang zelf zit in `calculateUnitSalePrice`, niet hier.
+   */
+  private async laadAfspraken(context: PriceContext): Promise<CustomerPriceAgreement[]> {
+    if (!context.customerId) return []
+
+    const rijen = await this.prisma.db.customerPriceAgreement.findMany({
+      where: {
+        customerId: context.customerId,
+        productId: context.productId,
+        isActive: true,
+        minQuantity: { lte: context.quantity },
+      },
+    })
+
+    return rijen.map((a) => ({
+      id: a.id,
+      customerId: a.customerId,
+      productId: a.productId,
+      minQuantity: a.minQuantity,
+      unitPrice: a.unitPrice.toString(),
+      validFrom: a.validFrom,
+      validTo: a.validTo,
+      isActive: a.isActive,
+    }))
   }
 
   /**

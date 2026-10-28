@@ -5,6 +5,19 @@ import { PricingService } from '../src/core/pricing/pricing.service'
 import { PrismaService } from '../src/core/prisma/prisma.service'
 
 /**
+ * De regel uitlezen uit een uitkomst. `PriceResult` is een union op `source`,
+ * dus zonder narrowing is `rule` niet te lezen - precies de bedoeling, want
+ * bij een klantprijsafspraak is er geen regel.
+ */
+function regelVan(uitkomst: { source: string; rule?: { id: string } }): { id: string } {
+  if (uitkomst.source !== 'RULE' || !uitkomst.rule) {
+    throw new Error(`Verwachtte een prijs uit een regel, maar de bron was ${uitkomst.source}`)
+  }
+  return uitkomst.rule
+}
+
+
+/**
  * De prijsengine tegen de echte database: staffel kiezen, regel kiezen,
  * prijs berekenen. Het rekenwerk zelf is apart getest in @rgh/contracts.
  */
@@ -58,6 +71,7 @@ describe('prijsengine', () => {
   }, 30000)
 
   afterAll(async () => {
+    await prisma.db.customerPriceAgreement.deleteMany({ where: { customerId } })
     await prisma.db.priceRule.deleteMany({ where: { id: { in: regelIds } } })
     await prisma.db.product.deleteMany({ where: { articleNumber: { startsWith: tag } } })
     await prisma.db.productCategory.deleteMany({ where: { slug: { startsWith: tag } } })
@@ -111,7 +125,7 @@ describe('prijsengine', () => {
     regelIds.push(klantregel.id)
 
     const metKlant = await pricing.resolveUnitPrice({ productId, quantity: 250, customerId })
-    expect(metKlant.rule.id).toBe(klantregel.id)
+    expect(regelVan(metKlant).id).toBe(klantregel.id)
     expect(metKlant.unitPrice.toFixed(4)).toBe('6.9064')
 
     // Zonder die klant geldt de algemene regel weer.
@@ -122,7 +136,7 @@ describe('prijsengine', () => {
   it('laat zien welke regels meespeelden, zodat een prijs navraagbaar is', async () => {
     const uitkomst = await pricing.resolveUnitPrice({ productId, quantity: 250, customerId })
     expect(uitkomst.consideredRuleIds).toHaveLength(2)
-    expect(uitkomst.consideredRuleIds[0]).toBe(uitkomst.rule.id)
+    expect(uitkomst.consideredRuleIds[0]).toBe(regelVan(uitkomst).id)
   })
 
   it('negeert een regel die pas later ingaat', async () => {
@@ -140,8 +154,64 @@ describe('prijsengine', () => {
     const straks = await pricing.resolveUnitPrice({
       productId, quantity: 250, at: new Date(Date.now() + 60 * 86400000),
     })
-    expect(straks.rule.id).toBe(toekomst.id)
+    expect(regelVan(straks).id).toBe(toekomst.id)
     expect(straks.unitPrice.toFixed(4)).toBe('12.9495')
+  })
+
+  it('laat een klantprijsafspraak voorgaan op elke prijsregel', async () => {
+    // Het acceptatiecriterium uit de roadmap. Er staat op dit moment al een
+    // klantregel met priority 10 en een productregel met priority 1; de
+    // afspraak moet daar langs, zonder dat er aan priority gesleuteld wordt.
+    const scherpsteRegel = await pricing.resolveUnitPrice({ productId, quantity: 250, customerId })
+
+    const afspraak = await prisma.db.customerPriceAgreement.create({
+      data: { customerId, productId, minQuantity: 100, unitPrice: '5.5000' },
+    })
+
+    const met = await pricing.resolveUnitPrice({ productId, quantity: 250, customerId })
+    expect(met.source).toBe('AGREEMENT')
+    expect(met.unitPrice.toFixed(4)).toBe('5.5000')
+    expect(met.unitPrice.toFixed(4)).not.toBe(scherpsteRegel.unitPrice.toFixed(4))
+    // De marge wordt tegen de inkoopstaffel van 250 stuks gerekend.
+    expect(met.purchasePrice.toFixed(4)).toBe('4.3165')
+    expect(met.marginAmount.toFixed(4)).toBe('1.1835')
+    expect(met.belowCost).toBe(false)
+
+    // Onder de drempel geldt de regel weer.
+    const onderDeDrempel = await pricing.resolveUnitPrice({ productId, quantity: 50, customerId })
+    expect(onderDeDrempel.source).toBe('RULE')
+
+    // En een andere klant heeft niets met deze afspraak te maken.
+    const zonderKlant = await pricing.resolveUnitPrice({ productId, quantity: 250 })
+    expect(zonderKlant.source).toBe('RULE')
+
+    await prisma.db.customerPriceAgreement.delete({ where: { id: afspraak.id } })
+  })
+
+  it('meldt een afspraak die onder de inkoopprijs ligt', async () => {
+    const afspraak = await prisma.db.customerPriceAgreement.create({
+      data: { customerId, productId, minQuantity: 1, unitPrice: '3.0000' },
+    })
+
+    const uitkomst = await pricing.resolveUnitPrice({ productId, quantity: 250, customerId })
+    expect(uitkomst.belowCost).toBe(true)
+    expect(uitkomst.marginAmount.isNegative()).toBe(true)
+
+    await prisma.db.customerPriceAgreement.delete({ where: { id: afspraak.id } })
+  })
+
+  it('negeert een afspraak die nog niet of niet meer geldt', async () => {
+    const verlopen = await prisma.db.customerPriceAgreement.create({
+      data: {
+        customerId, productId, minQuantity: 1, unitPrice: '5.0000',
+        validTo: new Date(Date.now() - 86400000),
+      },
+    })
+
+    const uitkomst = await pricing.resolveUnitPrice({ productId, quantity: 250, customerId })
+    expect(uitkomst.source).toBe('RULE')
+
+    await prisma.db.customerPriceAgreement.delete({ where: { id: verlopen.id } })
   })
 
   it('weigert een ongeldig aantal', async () => {

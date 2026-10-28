@@ -311,24 +311,99 @@ model Customer {
   notes     String?
   isActive  Boolean @default(true)
 
+  /// Welke betalingsvoorwaarde geldt. Leeg betekent: de standaard uit
+  /// payment_terms. Restrict, want een voorwaarde die in gebruik is mag niet
+  /// onder een klant vandaan verdwijnen.
+  paymentTermId String?      @db.Uuid
+  paymentTerm   PaymentTerm? @relation(fields: [paymentTermId], references: [id], onDelete: Restrict)
+
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  contacts    ContactPerson[]
-  addresses   Address[]
-  agreements  CustomerAgreement[]
-  orders      Order[]
-  documents   Document[]
-  tasks       Task[]
-  portalUsers User[]
-  channels    ShopChannel[]
-  priceRules  PriceRule[]
+  contacts        ContactPerson[]
+  addresses       Address[]
+  agreements      CustomerAgreement[]
+  priceAgreements CustomerPriceAgreement[]
+  orders          Order[]
+  documents       Document[]
+  tasks           Task[]
+  portalUsers     User[]
+  channels        ShopChannel[]
+  priceRules      PriceRule[]
 
   quotes Quote[]
 
   @@index([name])
+  @@index([paymentTermId])
   @@map("customers")
+}
+
+/// Betalingsvoorwaarde: een gedeelde lijst, niet een los veld per klant.
+/// Anders staan er na een jaar vijftien varianten van "30 dagen".
+model PaymentTerm {
+  id   String @id @default(uuid()) @db.Uuid
+  /// Stabiele sleutel voor code en koppelingen (net_30, eom_30, prepaid_50).
+  key  String @unique
+  name String
+
+  /// Dagen na de factuurdatum, of na de laatste dag van de factuurmaand als
+  /// `endOfMonth` aan staat.
+  days       Int     @default(30)
+  endOfMonth Boolean @default(false)
+
+  /// Deel dat vooraf betaald moet zijn. Relevant bij nieuwe klanten en grote
+  /// orders: er wordt pas ingekocht als de aanbetaling binnen is.
+  prepaymentPercent Decimal? @db.Decimal(5, 2)
+
+  /// Tekst zoals die op de factuur komt.
+  invoiceText String?
+
+  /// Hoogstens een rij met isDefault; een partiele unieke index dwingt dat af.
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sort      Int     @default(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+
+  @@index([isActive, sort])
+  @@map("payment_terms")
+}
+
+/// Een met de klant afgesproken bedrag per stuk, vanaf een aantal.
+///
+/// Staat los van `price_rules`: die rekenen een marge over de inkoopprijs,
+/// dit is een toegezegd bedrag. Daarom gaat een afspraak in de prijsengine
+/// altijd voor op een regel, ongeacht `priority`.
+model CustomerPriceAgreement {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Restrict: een product waarover een prijsafspraak loopt verdwijnt niet
+  /// stil uit de catalogus.
+  productId  String   @db.Uuid
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  minQuantity Int     @default(1)
+  unitPrice   Decimal @db.Decimal(14, 4)
+  /// Waar de afspraak uit komt: een mailwisseling, een jaarafspraak, een tender.
+  note        String?
+
+  validFrom DateTime?
+  validTo   DateTime?
+  isActive  Boolean   @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customerId, productId, minQuantity])
+  @@index([customerId, isActive])
+  @@index([productId])
+  @@map("customer_price_agreements")
 }
 
 model ContactPerson {
@@ -515,6 +590,8 @@ model Product {
   orderLines   OrderLine[]
   channelItems ChannelAssortmentItem[]
   priceRules   PriceRule[]
+
+  priceAgreements CustomerPriceAgreement[]
 
   quoteItems QuoteItem[]
 

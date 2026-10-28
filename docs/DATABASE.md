@@ -57,8 +57,22 @@ goedkeurder, financieel contact).
 ### CRM
 `customers`, `contact_persons`, `addresses`, `customer_agreements` — gereed.
 
-Te bouwen: `payment_terms` (betalingsvoorwaarden per klant),
-`customer_price_agreements` als eigen tabel naast de generieke prijsregels.
+`payment_terms` en `customer_price_agreements` - **gereed**.
+
+`payment_terms` is een gedeelde lijst waaruit klanten kiezen, geen veld per
+klant: anders staan er na een jaar vijftien varianten van "30 dagen". Een
+partiele unieke index (`WHERE "isDefault"`) laat hoogstens een standaard toe,
+en `customers.paymentTermId` is `onDelete: Restrict`, zodat een voorwaarde die
+in gebruik is niet onder een klant vandaan verdwijnt. De vervaldatum wordt niet
+opgeslagen maar berekend, door `calculateDueDate` in `@rgh/contracts`; in UTC
+en per dag, zodat zomertijd de vervaldag niet verschuift.
+
+`customer_price_agreements` staat bewust naast `price_rules` en niet erin: een
+regel rekent een marge over de inkoopprijs, een afspraak is een toegezegd
+bedrag per stuk vanaf een aantal. Daarom gaat een afspraak in de prijsengine
+altijd voor op elke regel, ongeacht `priority` - zie DECISIONS D-11.
+Check-constraints dwingen af dat de prijs niet negatief is, de drempel ten
+minste 1, en dat een geldigheidsvenster niet eindigt voordat het begint.
 
 ### Leveranciers
 `suppliers`, `supplier_contacts` — gereed.

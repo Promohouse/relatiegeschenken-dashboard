@@ -152,6 +152,16 @@ injector oplevert. Daarom:
 
 Validatie en OpenAPI komen uit Zod, niet uit class-validator. Zie ADR-0011.
 
+## Zod: `.partial()` haalt `.default()` niet weg
+
+`createXSchema.partial()` maakt elk veld optioneel maar laat de standaarden
+staan. Een PATCH met alleen een naam vult dan alle andere velden met hun
+beginwaarde, en dat is stil gegevensverlies - het haalde de standaard onder een
+betalingsvoorwaarde vandaan. **Schrijf een wijzigingsschema met de hand uit**,
+met `.optional()` en zonder `.default()`. `updateUserSchema`, `updateRoleSchema`
+en `updateAddressSchema` doen dat al; `updateCustomerSchema` mag `.partial()`
+gebruiken omdat het aanmaakschema geen standaarden heeft.
+
 ```bash
 npm run db:seed        # basisgegevens, demodata en demo-accounts met wachtwoord
 npm run api:dev        # api met herstart bij wijzigingen, op poort 3101

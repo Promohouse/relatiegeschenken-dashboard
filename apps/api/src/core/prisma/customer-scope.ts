@@ -18,6 +18,9 @@ const SCOPE_PER_MODEL: Record<string, (customerId: string) => object> = {
   contactPerson: (customerId) => ({ customerId }),
   address: (customerId) => ({ customerId }),
   customerAgreement: (customerId) => ({ customerId }),
+  // Een prijsafspraak is klantgebonden: een klant in het portaal mag nooit de
+  // afspraken van een andere klant zien, want daaruit volgen onze marges.
+  customerPriceAgreement: (customerId) => ({ customerId }),
   quote: (customerId) => ({ customerId }),
   order: (customerId) => ({ customerId }),
   document: (customerId) => ({ customerId }),

@@ -59,6 +59,25 @@ export function mapError(error: unknown): MappedError {
     return { status: 409, code: 'ONVERANDERLIJK', message: schoon }
   }
 
+  /**
+   * Een check-constraint die afgaat is onze eigen regel uit een migratie, geen
+   * serverfout. Zonder dit geeft een datum in de verkeerde volgorde een 500,
+   * en dan lijkt een typefout van de gebruiker op een storing.
+   *
+   * De naam van de constraint komt niet mee naar de client: die zegt een
+   * gebruiker niets. De melding wel, en de naam gaat het logboek in.
+   */
+  if (/violates check constraint/i.test(melding)) {
+    const naam = /constraint "([^"]+)"/.exec(melding)?.[1]
+    return {
+      status: 422,
+      code: 'REGEL_GESCHONDEN',
+      message:
+        'Deze gegevens gaan in tegen een regel van het systeem. Controleer de ingevulde waarden.',
+      internal: naam ? `check constraint ${naam}` : melding,
+    }
+  }
+
   if (isPrismaLike(error)) {
     switch (error.code) {
       case 'P2002': {

@@ -1,12 +1,16 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
+import type { PaymentTermView } from '@rgh/contracts'
+import { apiGet } from '@/lib/api'
 import { KlantFormulier } from '@/components/klant-formulier'
 import { getCurrentUser, mag } from '@/lib/session'
 
 export default async function NieuweKlant() {
   const user = await getCurrentUser()
   if (!mag(user, 'customers:create')) redirect('/klanten')
+
+  const termen = await apiGet<PaymentTermView[]>('/api/payment-terms/selectable')
 
   return (
     <div>
@@ -18,7 +22,7 @@ export default async function NieuweKlant() {
       <p className="mt-1 mb-6 text-sm text-ink-soft">
         Contactpersonen en adressen voeg je toe zodra de klant bestaat.
       </p>
-      <KlantFormulier />
+      <KlantFormulier betaaltermijnen={termen} />
     </div>
   )
 }
