@@ -6,6 +6,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Fase 0 documentatie op basis van de masterprompt: MASTERPLAN.md,
+  ARCHITECTURE.md, DATABASE.md, WORKFLOWS.md, SECURITY.md, DEPLOYMENT.md,
+  DEVELOPMENT-ROADMAP.md en DECISIONS.md. CLAUDE.md uitgebreid met tien
+  nieuwe harde regels.
+- Ontwerp van de centrale workflow-engine: vijf statusdimensies, afgeleide
+  orderstatus, parallelle orderregels, transactional outbox, idempotentie,
+  optimistic locking en de workflow voor inkoopfacturen.
+- Besluitenregister D-01 t/m D-10 met de verschillen tussen de masterprompt
+  en de opdracht van 8 oktober.
 - Stap 1b: staging- en connectortabellen met capability-routing per
   leverancier, drukproeven met versies en goedkeuringshistorie, inkoop met
   deelontvangsten, voorbereide inkoopfacturen met dubbelherkenning, en
