@@ -6,6 +6,29 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **midocean-koppeling vastgelegd op hun eigen documentatie.** De officiele
+  handleiding (v1.12.2) is ontvangen en verwerkt in
+  `docs/leveranciers/midocean.md` en ADR-0013. Daarmee is de koppeling voor het
+  eerst bouwbaar zonder aannames. Belangrijkste correctie op het onderzoek van
+  8 oktober: **SFTP bestaat niet meer**, midocean heeft die dienst in 2025
+  uitgezet; alles loopt via REST.
+- **`parseSupplierDecimal()`**: bedragen uit leveranciersdata komen als tekst
+  met een decimale komma (`"4,22"`). `parseFloat` maakt daar stilzwijgend `4`
+  van - geen afrondingsfout maar een factor, die pas in de marge opvalt. Alle
+  binnenkomende bedragen lopen nu door één functie die weigert te gokken, ook
+  bij duizendtalnotaties.
+- **Drukprijsberekening van midocean** in `@rgh/contracts`: vier prijstypes
+  (per positie, per kleur, per oppervlak, per oppervlak én kleur), setup per
+  kleur of per positie, handling per stuk, staffels, herhaalorders en de witte
+  onderlaag bij techniek ST. De vier doorgerekende voorbeelden uit hun
+  Appendix F staan als test, dus een afwijking van midocean's eigen uitkomst
+  valt hier op en niet op hun factuur. Twee inconsistenties in die appendix
+  zijn niet weggepoetst maar vastgelegd en staan op de vragenlijst.
+- Bestellen bij midocean is **voorbereid maar niet gebouwd**: de capabilities
+  `PLACE_ORDER` en `ORDER_STATUS` staan op de verbinding en zijn uitgezet, met
+  een verwijzing naar ADR-0013. Er is bewust geen code die een order naar een
+  leverancier kan sturen.
+
 - **Betalingsvoorwaarden.** Een gedeelde lijst (`30 dagen netto`, `einde maand
   plus 30`, `50% vooruit`) waaruit klanten kiezen, met hoogstens één standaard,
   afgedwongen door een partiele unieke index in de database. De

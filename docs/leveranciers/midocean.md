@@ -1,0 +1,151 @@
+# midocean - REST API
+
+Bron: *API implementation guide and integration overview*, versie 1.12.2,
+gedateerd 23-10-2024, ontvangen van de opdrachtgever op 28-10-2026.
+
+Dit document bevat **alleen wat in die handleiding staat**, plus expliciet
+gemarkeerde punten die nog bij midocean nagevraagd moeten worden. Niets is
+geverifieerd tegen een echte respons: er zijn nog geen credentials. Zodra er
+een testsleutel is, hoort dit document bijgewerkt te worden met wat de API
+werkelijk teruggeeft.
+
+## Toegang
+
+| | |
+|---|---|
+| Productie | `https://api.midocean.com` |
+| Test | `https://apitest.midocean.com` |
+| Authenticatie | header `x-Gateway-APIKey: <sleutel>` |
+| Sleutel aanvragen | midocean-account → Account → tab *Customer API* → Register |
+| Testsleutel | **niet zelf aan te maken**; opvragen bij de vaste midocean-contactpersoon |
+
+Twee aandachtspunten die het bouwen raken:
+
+1. **Een sleutel moet per endpoint geabonneerd worden.** In het portaal vink je
+   per API aan of de sleutel hem mag gebruiken. Een foutmelding
+   *"Unauthorized Application Request"* betekent dus niet per se een verkeerde
+   sleutel; het kan ook een ontbrekend abonnement zijn. Onze foutafhandeling
+   moet dat verschil noemen, anders zoekt iemand uren in de verkeerde hoek.
+2. **De testomgeving staat 's avonds uit** (buiten Europese kantooruren),
+   en geeft dan `503 Service Temporarily Unavailable`. Een nachtelijke import
+   tegen test is dus zinloos; dat is geen storing van ons.
+
+## Endpoints die wij gebruiken
+
+Alle GET. Zonder `Accept`-header is het antwoord JSON.
+
+| Doel | Endpoint | Ververst |
+|---|---|---|
+| Voorraad | `/gateway/stock/2.0` | elk uur |
+| Productinformatie | `/gateway/products/2.0?language=nl` | dagelijks |
+| Drukgegevens | `/gateway/printdata/1.0` | dagelijks |
+| Productprijzen (onze inkoop) | `/gateway/pricelist/2.0` | dagelijks |
+| Drukprijzen | `/gateway/printpricelist/2.0` | dagelijks |
+
+Talen voor productinformatie: en, es, pt, fr, it, nl, de, hu, ro, cs, sv, fi, da.
+
+**Niet in gebruik, wel gedocumenteerd** (zie ADR-0013): `/gateway/order/2.1/create`,
+`/gateway/order/2.1/detail?order_number=`, `/gateway/proof/1.0/approve`,
+`/gateway/proof/1.0/reject`, `/gateway/proof/1.0/addartwork`.
+
+## Vijf dingen die bepalen hoe wij dit bouwen
+
+### 1. SFTP is dood
+
+De changelog van v1.11 zegt: *SFTP service is now deprecated and will be
+discontinued in 2025*, en alle SFTP-verwijzingen zijn uit de handleiding
+gehaald. Ons onderzoeksdocument van 8 oktober noemde SFTP nog als de route
+voor midocean; dat klopt niet meer. De koppeling is REST, punt.
+
+### 2. Bedragen komen als tekst met een komma
+
+Voorbeelden uit de handleiding: `"price": "4,22"`, `"setup": "60,00"`,
+`"price": "0,08"`. Dat is een string met een decimale komma. `new Decimal("4,22")`
+gooit een fout, en `parseFloat` maakt er stilletjes `4` van - dat laatste is
+het gevaarlijke geval, want dan klopt een inkoopprijs met tientallen procenten
+en valt het pas op in de marge.
+
+Daarom gaat alle leveranciersdata door `parseSupplierDecimal()` in
+`@rgh/contracts`, die een lege waarde, een punt en een komma aankan en bij iets
+onverwachts een fout gooit in plaats van te gokken.
+
+### 3. Er is geen wijzigingsfeed
+
+> *At this moment it isn't possible to retrieve only a portion of the product
+> data. This functionality will also be added during late 2024.*
+
+De handleiding is van oktober 2024, dus mogelijk bestaat dit inmiddels wel.
+**Navragen.** Zolang het er niet is, halen we steeds de volledige catalogus op
+en bepalen wij zelf wat er veranderd is: elke rij gaat met een SHA-256 over de
+gecanoniseerde payload naar `raw_supplier_products`, en alleen een gewijzigde
+hash levert een `staged_change` op. Dat is ook de reden dat die hash-kolom er
+al in staat (ADR-0004).
+
+### 4. Drukprijzen zijn een berekening, geen opzoeking
+
+De drukprijs volgt uit vier gegevens: de **manipulatiecode** (A-Z, handling per
+stuk), de **setup** (eenmalig, of `setup_repeat` bij een herhaalorder), de
+**staffelprijs** en het **prijstype** van de techniek. Er zijn vier prijstypes:
+
+| Prijstype | Prijs hangt af van |
+|---|---|
+| `NumberOfPositions` | aantal posities |
+| `NumberOfColours` | aantal kleuren; met `next_colour_cost_indicator = X` heeft kleur 2 en verder de prijs `next_price` |
+| `AreaRange` | oppervlakte van het logo in cm², via `area_from`/`area_to` |
+| `ColourAreaRange` | oppervlakte én aantal kleuren |
+
+Bijzonderheid: techniek `ST` kost bij gekleurde artikelen één keer
+`price_next * aantal` extra, omdat er eerst een witte onderlaag geprint wordt.
+
+Appendix F van de handleiding geeft vier doorgerekende voorbeelden met de
+verwachte totalen. Die staan als test in `packages/contracts/test/midocean-print-price.test.ts`,
+zodat onze berekening aantoonbaar hetzelfde uitkomt als die van midocean.
+
+**Twee onopgeloste punten in die appendix**, die wij niet kunnen wegpoetsen:
+
+- Rij 1 noemt een setup van `29,25` en rekent `29,25 * 3 = 88,5`. Dat is
+  87,75. De uitkomst 88,5 hoort bij een setup van 29,50. Eén van beide is een
+  typefout in de handleiding. Onze functie rekent met de formule, dus
+  87,75, en de test legt het verschil vast met een verwijzing hiernaartoe.
+- Bij `AreaRange` en `NumberOfPositions` wordt in de voorbeelden ook de
+  handling met het aantal posities vermenigvuldigd, terwijl de tekst zegt dat
+  handling alleen van het product afhangt en niet van de drukconfiguratie. Wij
+  volgen het rekenvoorbeeld, want dat is wat midocean factureert, en noteren
+  het als na te vragen.
+
+Beide punten horen bevestigd te worden met één echte order voordat wij een
+drukprijs aan een klant tonen.
+
+### 5. Een product heeft varianten, drukwerk hangt aan het hoofdartikel
+
+- `products/2.0` geeft per `master_code` (bijvoorbeeld `AR1804`) een lijst
+  varianten met `sku` = `{master_code}-{variant_code}`, en bij textiel
+  `{master_code}-{variant_code}-{size_code}`.
+- Afbeeldingen hangen aan de **variant** (`digital_assets`, 700x700 en origineel),
+  documenten en certificaten aan het **hoofdartikel**.
+- `printdata/1.0` is per `master_code`: de drukinformatie is gelijk voor alle
+  kleuren van een artikel. De koppeling tussen beide bestanden loopt dus over
+  `master_code`.
+
+Dat sluit aan op ons model: `Product` met `ProductVariant`, en bedrukopties aan
+het product. De kleurcode uit de bestelling heet bij midocean
+`item_color_number`, en is `color_code` uit de productinformatie.
+
+## Nog na te vragen bij midocean
+
+1. Bestaat de delta-/wijzigingsfeed voor productinformatie inmiddels?
+2. Welke van de twee waarden in Appendix F rij 1 klopt: setup 29,25 of 29,50?
+3. Wordt de handling-prijs werkelijk per positie gerekend?
+4. Zijn er rate limits, en wat gebeurt er bij overschrijding?
+5. Hoe groot is de volledige productrespons? Dat bepaalt of wij hem kunnen
+   streamen of in het geheugen mogen laden.
+6. Een testsleutel voor `apitest.midocean.com`.
+
+## Grenzen die wij onszelf opleggen
+
+- **Geen bestellingen plaatsen.** Harde regel 13; zie ADR-0013 voor wat we wel
+  alvast klaarzetten.
+- **Geen credentials in de repository of in `.env` per leverancier.** Ze horen
+  versleuteld in `supplier_connections.credentials`.
+- **Geen productie-import vanuit DEV.** Lezen uit de testomgeving mag; de
+  productiesleutel hoort niet op een ontwikkelmachine.

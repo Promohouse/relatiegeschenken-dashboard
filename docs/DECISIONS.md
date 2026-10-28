@@ -20,6 +20,7 @@ nieuwe die de oude vervangt.
 | [0010](architecture/0010-deployment-decorsign-k3s-argocd.md) | Deployment op Decorsign K3s via ArgoCD, GitOps, twee namespaces | besloten 2026-10-28; drie punten bij Decorsign open |
 | [0011](architecture/0011-validatie-en-openapi-uit-zod.md) | Zod als enige bron voor validatie, types en documentatie | besloten 2026-10-28 |
 | [0012](architecture/0012-authenticatie-better-auth.md) | better-auth voor identiteit, autorisatie en klantisolatie zelf | besloten 2026-10-28 |
+| [0013](architecture/0013-midocean-rest-koppeling.md) | midocean als eerste koppeling, via REST; bestellen voorbereid maar niet gebouwd | besloten 2026-10-28, op basis van hun handleiding v1.12.2 |
 
 ## 1b. Bevestigd op 2026-10-28
 
@@ -162,6 +163,12 @@ CSV/XLSX-import vooraan, met de API-architectuur als voorbereiding. Dat is
 dezelfde route die ik toen als eerste connector adviseerde: bestandsimport
 werkt vandaag, zonder credentials, en blijft de oplossing voor Clipper en
 Toppoint. Geen nieuw besluit nodig, wel een verschuiving in de planning.
+
+**Bijgesteld op 28 oktober 2026.** De opdrachtgever leverde de officiele
+midocean-handleiding. Daarmee is de midocean-koppeling niet langer een
+aanname maar bouwbaar, en gaat hij gelijk op met de bestandsimport in plaats
+van erachteraan. Zie [ADR-0013](architecture/0013-midocean-rest-koppeling.md).
+Bestandsimport blijft nodig voor Clipper en Toppoint.
 
 ### D-11 — Voorrang tussen prijsregels *(deels beslist in code)*
 

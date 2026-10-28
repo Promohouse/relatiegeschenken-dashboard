@@ -1,7 +1,14 @@
 # Koppelmogelijkheden per leverancier
 
 Onderzocht op 2026-10-08, op basis van openbare bronnen. **Niets hiervan is
-geverifieerd tegen echte documentatie of credentials.** Voor iedere leverancier
+geverifieerd tegen echte documentatie of credentials.**
+
+> **midocean is inmiddels wel geverifieerd.** Op 2026-10-28 kwam de officiele
+> handleiding binnen; de feiten staan in [midocean.md](midocean.md) en het
+> besluit in [ADR-0013](../architecture/0013-midocean-rest-koppeling.md).
+> Let op: de regel hieronder over SFTP voor midocean **klopt niet meer**.
+> midocean heeft die dienst uitgefaseerd en in 2025 uitgezet; de koppeling is
+> REST. Dat is precies waarom dit document als ongeverifieerd gemarkeerd staat. Voor iedere leverancier
 geldt: eerst de officiele integratiehandleiding opvragen, dan bouwen. Geen
 endpoints of veldnamen aannemen op basis van dit document.
 
@@ -22,7 +29,9 @@ endpoints of veldnamen aannemen op basis van dit document.
    en Toppoint zolang die geen API hebben.
 2. **PF Concept** - best gedocumenteerd, duidelijke scheiding per feedtype.
 3. **Anda** - REST plus losse feeds, eigen Order API.
-4. **midocean** - SFTP XML, vraagt eerst toegang via hun portaal.
+4. ~~**midocean** - SFTP XML, vraagt eerst toegang via hun portaal.~~
+   **Achterhaald.** midocean is REST en staat nu vooraan, omdat de
+   documentatie er als eerste is. Zie [midocean.md](midocean.md).
 5. **Clipper**, **Toppoint** - zodra duidelijk is wat zij kunnen leveren.
 
 ## PSI

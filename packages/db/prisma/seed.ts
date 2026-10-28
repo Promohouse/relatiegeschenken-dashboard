@@ -763,6 +763,11 @@ interface CapabilityDefinition {
   priority: number
   /** Cron-uitdrukking; leeg betekent alleen handmatig of op gebeurtenis. */
   schedule?: string
+  /**
+   * Uit betekent: gedocumenteerd, maar bewust niet in gebruik. Zo blijft
+   * zichtbaar wat een leverancier kan, zonder dat de routing hem kiest.
+   */
+  enabled?: boolean
 }
 
 interface ConnectionDefinition {
@@ -807,21 +812,31 @@ async function seedConnections() {
       ],
     },
     {
+      // Blijft staan als vastlegging dat deze route onderzocht is, maar hij
+      // bestaat niet meer: midocean heeft SFTP met versie 1.11 van hun
+      // handleiding uitgefaseerd en in 2025 uitgezet. Niet verwijderd, want
+      // dan verdwijnt ook waarom we hem niet gebruiken.
       supplier: 'MIDOCEAN', key: 'midocean-sftp', connectorKey: 'midocean-sftp', transport: 'SFTP',
-      notes: 'Productdata via SFTP in XML (Prodinfo). Toegang aanvragen via het portaal.',
+      notes:
+        'VERVALLEN. midocean heeft de SFTP-dienst uitgefaseerd (handleiding v1.11) en in 2025 ' +
+        'uitgezet. Alles loopt via midocean-api. Zie ADR-0013.',
+      capabilities: [],
+    },
+    {
+      supplier: 'MIDOCEAN', key: 'midocean-api', connectorKey: 'midocean-api', transport: 'REST',
+      notes:
+        'REST-koppeling volgens handleiding v1.12.2. Sleutel in de header x-Gateway-APIKey, ' +
+        'test op apitest.midocean.com. Zie docs/leveranciers/midocean.md en ADR-0013.',
       capabilities: [
         { capability: 'CATALOG', priority: 10, schedule: '0 2 * * *' },
         { capability: 'MEDIA', priority: 10, schedule: '30 2 * * *' },
         { capability: 'PRICE_TIERS', priority: 10, schedule: '0 2 * * *' },
-      ],
-    },
-    {
-      supplier: 'MIDOCEAN', key: 'midocean-api', connectorKey: 'midocean-api', transport: 'REST',
-      notes: 'Customer API voor voorraad, ordermanagement en drukconfiguratie.',
-      capabilities: [
         { capability: 'INVENTORY', priority: 10, schedule: '0 * * * *' },
-        { capability: 'PLACE_ORDER', priority: 10 },
-        { capability: 'ORDER_STATUS', priority: 10, schedule: '0 8,16 * * *' },
+        // Gedocumenteerd en uit: bestellen gaat buiten het platform om
+        // (harde regel 13). Zie ADR-0013 voor wat er nodig is om dit later
+        // wel te bouwen.
+        { capability: 'PLACE_ORDER', priority: 10, enabled: false },
+        { capability: 'ORDER_STATUS', priority: 10, enabled: false },
       ],
     },
     {
@@ -855,15 +870,31 @@ async function seedConnections() {
       },
     })
 
+    // Capabilities die uit de definitie verdwenen zijn: uitzetten, niet
+    // verwijderen. Rij 9 van CLAUDE.md geldt ook voor configuratie, en een
+    // uitgezette rij vertelt nog dat die route ooit bestond.
+    await prisma.supplierConnectionCapability.updateMany({
+      where: {
+        connectionId: connection.id,
+        capability: { notIn: def.capabilities.map((c) => c.capability) },
+      },
+      data: { isEnabled: false },
+    })
+
     for (const cap of def.capabilities) {
       await prisma.supplierConnectionCapability.upsert({
         where: { connectionId_capability: { connectionId: connection.id, capability: cap.capability } },
-        update: { priority: cap.priority, schedule: cap.schedule ?? null },
+        update: {
+          priority: cap.priority,
+          schedule: cap.schedule ?? null,
+          isEnabled: cap.enabled ?? true,
+        },
         create: {
           connectionId: connection.id,
           capability: cap.capability,
           priority: cap.priority,
           schedule: cap.schedule ?? null,
+          isEnabled: cap.enabled ?? true,
           ...demo,
         },
       })
