@@ -20,6 +20,21 @@ const VELDNAMEN: Record<string, string> = {
   articleNumber: 'Artikelnummer',
   varianten: 'Varianten',
   reden: 'Reden',
+  purchasePrice: 'Inkoopprijs',
+  currency: 'Valuta',
+  staffels: 'Inkoopstaffels',
+}
+
+const euro = (bedrag: string) =>
+  new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 })
+    .format(Number(bedrag))
+
+/** Een staffel leesbaar maken: "vanaf 250: € 4,07". */
+const staffelregels = (waarde: unknown): string[] => {
+  if (!Array.isArray(waarde)) return []
+  return (waarde as { minimumQuantity: number; unitPrice: string }[]).map(
+    (t) => `vanaf ${t.minimumQuantity}: ${euro(t.unitPrice)}`,
+  )
 }
 
 const toon = (waarde: unknown): string => {
@@ -35,6 +50,37 @@ function Verschil({ veld, waarde }: { veld: string; waarde: unknown }) {
 
   if (veld === 'reden') {
     return <p className="text-xs text-ink-soft">{toon(paar.naar)}</p>
+  }
+
+  if (veld === 'staffels') {
+    const oud = staffelregels(paar.van)
+    const nieuw = staffelregels(paar.naar)
+    return (
+      <div className="text-sm">
+        <span className="text-xs uppercase tracking-wide text-ink-faint">{label}</span>
+        <div className="mt-0.5 grid gap-0.5 sm:grid-cols-2">
+          <div className="text-ink-soft">
+            {oud.length === 0 ? '— geen staffels' : oud.map((r) => <div key={r}>{r}</div>)}
+          </div>
+          <div className="font-medium">
+            {nieuw.length === 0 ? '— geen staffels' : nieuw.map((r) => <div key={r}>{r}</div>)}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (veld === 'purchasePrice') {
+    return (
+      <div className="text-sm">
+        <span className="text-xs uppercase tracking-wide text-ink-faint">{label}</span>
+        <div className="mt-0.5 flex flex-wrap items-center gap-2 tabular">
+          <span className="text-ink-soft line-through decoration-ink-faint/50">{euro(String(paar.van))}</span>
+          <span className="text-ink-faint" aria-hidden>→</span>
+          <span className="font-medium">{euro(String(paar.naar))}</span>
+        </div>
+      </div>
+    )
   }
 
   if (veld === 'varianten') {

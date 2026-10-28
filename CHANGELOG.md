@@ -6,6 +6,18 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **Prijsimport**: inkoopprijzen en staffels uit `pricelist/2.0`, met dezelfde
+  beoordelingsstap als de catalogus. In het scherm staan de oude en nieuwe
+  staffel naast elkaar.
+- Daarbij één ongemak eerlijk afgehandeld: midocean prijst **per variant**,
+  onze catalogus houdt één inkoopprijs **per leveranciersartikel** aan. Kosten
+  de kleuren van een artikel verschillend, dan wordt er niets gekozen — het
+  komt als fout op die regel te staan mét de bedragen, zodat iemand het kan
+  bekijken. Eén prijs verzinnen is precies het soort stille aanname dat pas in
+  een marge opduikt.
+- Staffels worden bij het toepassen **vervangen**, niet samengevoegd: een
+  drempel die de leverancier niet meer levert hoort te verdwijnen. Dat mag,
+  anders dan bij producten, omdat een order zijn prijzen bij aanmaak kopieert.
 - Script om credentials van een koppeling versleuteld op te slaan
   (`npm run connection:credentials -w @rgh/api`). De waarde komt uit een
   omgevingsvariabele en niet uit een argument, want een argument belandt in de

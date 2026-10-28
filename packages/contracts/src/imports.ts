@@ -39,6 +39,8 @@ export const importRunSummarySchema = z.object({
       updated: z.number().int(),
       unchanged: z.number().int(),
       missing: z.number().int(),
+      /** Alleen bij prijzen: regels die bij geen enkel eigen artikel horen. */
+      unmatched: z.number().int().optional(),
     })
     .nullable(),
 })

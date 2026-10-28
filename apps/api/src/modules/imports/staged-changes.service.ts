@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import Decimal from 'decimal.js'
 import type { Prisma } from '@rgh/db'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { AuditService } from '../../core/audit/audit.service'
@@ -112,6 +113,13 @@ export class StagedChangesService {
           'te passen. Draai eerst een echte import.',
       )
     }
+    if (wijziging.entityType === 'ProductSupplier') {
+      const koppelingId = await this.wijzigInkoopprijs(wijziging)
+      await this.rondAf(wijziging, koppelingId, 'ProductSupplier')
+      resultaat.applied++
+      return
+    }
+
     if (wijziging.entityType !== 'Product') {
       throw new PreconditionError(
         `Wijzigingen op ${wijziging.entityType} kunnen nog niet toegepast worden.`,
@@ -148,6 +156,101 @@ export class StagedChangesService {
     })
 
     resultaat.applied++
+  }
+
+  /**
+   * Inkoopprijs en staffels van een leveranciersartikel bijwerken.
+   *
+   * De staffels worden vervangen, niet samengevoegd: een staffel die de
+   * leverancier niet meer levert hoort te verdwijnen, anders blijft een oude
+   * drempel meerekenen. Dat mag hier, anders dan bij producten, omdat een
+   * order zijn prijzen bij aanmaak kopieert (harde regel 3) en dus niet van
+   * deze rijen afhangt.
+   */
+  private async wijzigInkoopprijs(wijziging: VolledigeWijziging): Promise<string> {
+    if (!wijziging.entityId) {
+      throw new PreconditionError('Deze wijziging verwijst niet naar een leverancierskoppeling.')
+    }
+
+    const koppeling = await this.prisma.db.productSupplier.findUnique({
+      where: { id: wijziging.entityId },
+      include: { purchaseTiers: { orderBy: { minQuantity: 'asc' } } },
+    })
+    if (!koppeling) {
+      throw new NotFoundError('De leverancierskoppeling van deze wijziging bestaat niet meer.')
+    }
+
+    const prijs = wijziging.diff.purchasePrice as { van: string; naar: string } | undefined
+    if (prijs) {
+      const nu = koppeling.purchasePrice.toString()
+      // Op vier decimalen vergelijken: de database geeft "4.22" terug waar de
+      // import "4.2200" zag, en dat is hetzelfde bedrag.
+      if (new Decimal(nu).toFixed(4) !== new Decimal(prijs.van).toFixed(4)) {
+        throw new ConflictError(
+          `De inkoopprijs is sinds de import gewijzigd (nu ${nu}, bij de import ${prijs.van}). ` +
+            'Draai de import opnieuw zodat het voorstel klopt.',
+        )
+      }
+    }
+
+    const staffels = wijziging.diff.staffels as
+      | { van: unknown; naar: { minimumQuantity: number; unitPrice: string }[] }
+      | undefined
+    const valuta = wijziging.diff.currency as { van: string; naar: string } | undefined
+
+    await this.prisma.unscoped.$transaction(async (tx) => {
+      if (prijs || valuta) {
+        await tx.productSupplier.update({
+          where: { id: koppeling.id },
+          data: {
+            ...(prijs ? { purchasePrice: prijs.naar } : {}),
+            ...(valuta ? { currency: valuta.naar } : {}),
+          },
+        })
+      }
+
+      if (staffels) {
+        await tx.purchasePriceTier.deleteMany({ where: { productSupplierId: koppeling.id } })
+        if (staffels.naar.length > 0) {
+          await tx.purchasePriceTier.createMany({
+            data: staffels.naar.map((t) => ({
+              productSupplierId: koppeling.id,
+              minQuantity: t.minimumQuantity,
+              unitPrice: t.unitPrice,
+            })),
+          })
+        }
+      }
+    })
+
+    return koppeling.id
+  }
+
+  /** De administratie na een geslaagde toepassing. */
+  private async rondAf(wijziging: VolledigeWijziging, entityId: string, entity: string) {
+    await this.prisma.db.stagedChange.update({
+      where: { id: wijziging.id },
+      data: {
+        status: 'APPLIED',
+        entityId,
+        reviewedById: RequestContext.get()?.userId ?? null,
+        reviewedAt: new Date(),
+        appliedAt: new Date(),
+      },
+    })
+
+    await this.audit.record({
+      entity,
+      entityId,
+      action: 'UPDATE',
+      diff: {
+        ...this.auditDiff(wijziging.diff),
+        bron: {
+          van: null,
+          naar: `Import ${wijziging.importRun.id} van ${wijziging.importRun.connection.key}`,
+        },
+      },
+    })
   }
 
   /**

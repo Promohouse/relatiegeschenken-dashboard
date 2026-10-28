@@ -143,6 +143,30 @@ zodat onze berekening aantoonbaar hetzelfde uitkomt als die van midocean.
 Beide punten horen bevestigd te worden met één echte order voordat wij een
 drukprijs aan een klant tonen.
 
+### 4b. Prijzen zijn per variant, onze inkoopprijs per artikel
+
+`pricelist/2.0` geeft een prijs per **sku**, dus per variant. Onze catalogus
+houdt één inkoopprijs per **leveranciersartikel** aan, in
+`product_suppliers.purchasePrice` met staffels in `purchase_price_tiers`.
+
+Bij promotieartikelen kosten alle kleuren meestal hetzelfde en valt dat niet
+op. Niet altijd: een afwijkende kleur of een textielmaat kan duurder zijn.
+
+**Wat wij doen:** niets kiezen. Verschillen de varianten van een artikel in
+prijs of staffel, dan komt dat als fout op die regel te staan, met de
+bedragen erbij, en wijzigt er niets. Eén prijs verzinnen voor een artikel
+waarvan de kleuren verschillend kosten is precies het soort stille aanname
+dat pas in een marge opduikt.
+
+De koppeling van sku naar artikelnummer komt uit de vastgelegde catalogus, niet
+uit het opsplitsen van de sku op streepjes - dat laatste zou een aanname over
+hun naamgeving zijn, en bij textiel (`{master}-{kleur}-{maat}`) gaat het mis.
+Daarom moet er eerst een echte catalogusimport gedraaid zijn.
+
+**Nog te beslissen:** of wij de inkoopprijs per variant gaan bijhouden. Dat is
+een schemawijziging en raakt de prijsengine, dus dat gebeurt pas als blijkt
+dat het in de praktijk vaak voorkomt.
+
 ### 5. Een product heeft varianten, drukwerk hangt aan het hoofdartikel
 
 - `products/2.0` geeft per `master_code` (bijvoorbeeld `AR1804`) een lijst

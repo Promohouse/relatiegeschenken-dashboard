@@ -6,7 +6,7 @@ import request from 'supertest'
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { maakGebruikerMetWachtwoord } from './helpers'
-import { PRODUCT_ANTWOORD } from './fixtures/midocean'
+import { PRIJS_VOOR_AR1804, PRODUCT_ANTWOORD } from './fixtures/midocean'
 
 loadEnv({ path: resolve(__dirname, '../../../.env') })
 process.env.NODE_ENV = 'test'
@@ -493,6 +493,169 @@ describe('importpijplijn', () => {
       await prisma.unscoped.session.deleteMany({ where: { userId: kijker.id } })
       await prisma.unscoped.account.deleteMany({ where: { userId: kijker.id } })
       await prisma.unscoped.user.deleteMany({ where: { id: kijker.id } })
+    })
+  })
+
+  describe('prijzen', () => {
+    /** De prijsimport heeft een eigen capability op de koppeling nodig. */
+    beforeAll(async () => {
+      await prisma.unscoped.supplierConnectionCapability.upsert({
+        where: { connectionId_capability: { connectionId, capability: 'PRICE_TIERS' } },
+        update: { isEnabled: true },
+        create: { connectionId, capability: 'PRICE_TIERS', priority: 10 },
+      })
+    })
+
+    const prijsImport = async (dryRun = true) => {
+      antwoord = PRIJS_VOOR_AR1804
+      try {
+        return await api()
+          .post('/api/imports/run').set('Cookie', cookie)
+          .send({ connectionKey: verbinding, capability: 'PRICE_TIERS', dryRun })
+          .expect(201)
+      } finally {
+        antwoord = PRODUCT_ANTWOORD
+      }
+    }
+
+    it('koppelt een prijsregel aan het artikel via de vastgelegde catalogus', async () => {
+      // Eerst zorgen dat AR1804 als product bestaat, met de koppeling.
+      const basis = await start({ dryRun: false }).expect(201)
+      const changes = await api()
+        .get(`/api/imports/runs/${basis.body.importRunId}/changes`).set('Cookie', cookie).expect(200)
+      const nieuw = (changes.body as { id: string; externalId: string; changeType: string }[])
+        .find((c) => c.externalId === 'AR1804' && c.changeType === 'CREATE')
+      if (nieuw) {
+        await api().post(`/api/imports/changes/${nieuw.id}/apply`).set('Cookie', cookie).expect(201)
+      }
+
+      const res = await prijsImport(true)
+      expect(res.body.summary).toMatchObject({ updated: 1, unchanged: 0 })
+      // De variant van een artikel dat wij niet hebben telt apart.
+      expect(res.body.summary.unmatched).toBe(1)
+    })
+
+    it('toont de nieuwe prijs met de staffels', async () => {
+      const res = await prijsImport(true)
+      const changes = await api()
+        .get(`/api/imports/runs/${res.body.importRunId}/changes`).set('Cookie', cookie).expect(200)
+
+      expect(changes.body).toHaveLength(1)
+      const diff = changes.body[0].diff
+      expect(changes.body[0].entityType).toBe('ProductSupplier')
+      // Van nul (een nieuw geimporteerd product heeft nog geen inkoopprijs)
+      // naar het bedrag uit de prijslijst, met de komma omgezet.
+      expect(diff.purchasePrice).toEqual({ van: '0.0000', naar: '4.2200' })
+      expect(diff.staffels.naar).toEqual([
+        { minimumQuantity: 1, unitPrice: '4.2200' },
+        { minimumQuantity: 250, unitPrice: '4.0700' },
+        { minimumQuantity: 500, unitPrice: '3.9200' },
+        { minimumQuantity: 1000, unitPrice: '3.7700' },
+      ])
+    })
+
+    it('zet bij toepassen de inkoopprijs en de staffels', async () => {
+      const res = await prijsImport(false)
+      const changes = await api()
+        .get(`/api/imports/runs/${res.body.importRunId}/changes`).set('Cookie', cookie).expect(200)
+      await api().post(`/api/imports/changes/${changes.body[0].id}/apply`).set('Cookie', cookie).expect(201)
+
+      const koppeling = await prisma.unscoped.productSupplier.findFirstOrThrow({
+        where: { supplierId, supplierArticleNumber: 'AR1804' },
+        include: { purchaseTiers: { orderBy: { minQuantity: 'asc' } } },
+      })
+      expect(koppeling.purchasePrice.toString()).toBe('4.22')
+      expect(koppeling.purchaseTiers.map((t) => [t.minQuantity, t.unitPrice.toString()])).toEqual([
+        [1, '4.22'], [250, '4.07'], [500, '3.92'], [1000, '3.77'],
+      ])
+    })
+
+    it('meldt daarna geen verschil meer', async () => {
+      const res = await prijsImport(true)
+      expect(res.body.summary).toMatchObject({ updated: 0, unchanged: 1 })
+    })
+
+    it('vervangt staffels in plaats van ze te stapelen', async () => {
+      antwoord = {
+        currency: 'EUR',
+        price: [
+          { sku: 'AR1804-03', price: '4,00', scale: [{ minimum_quantity: '1', price: '4,00' }] },
+          { sku: 'AR1804-06', price: '4,00', scale: [{ minimum_quantity: '1', price: '4,00' }] },
+        ],
+      }
+      try {
+        const res = await api()
+          .post('/api/imports/run').set('Cookie', cookie)
+          .send({ connectionKey: verbinding, capability: 'PRICE_TIERS', dryRun: false })
+          .expect(201)
+        const changes = await api()
+          .get(`/api/imports/runs/${res.body.importRunId}/changes`).set('Cookie', cookie).expect(200)
+        await api().post(`/api/imports/changes/${changes.body[0].id}/apply`).set('Cookie', cookie).expect(201)
+
+        const koppeling = await prisma.unscoped.productSupplier.findFirstOrThrow({
+          where: { supplierId, supplierArticleNumber: 'AR1804' },
+          include: { purchaseTiers: true },
+        })
+        expect(koppeling.purchaseTiers).toHaveLength(1)
+        expect(koppeling.purchasePrice.toString()).toBe('4')
+      } finally {
+        antwoord = PRODUCT_ANTWOORD
+      }
+    })
+
+    it('kiest niets als de varianten verschillend kosten', async () => {
+      // Dit is het punt waar ons model en dat van midocean niet gelijk lopen:
+      // zij prijzen per variant, wij per leveranciersartikel.
+      antwoord = {
+        currency: 'EUR',
+        price: [
+          { sku: 'AR1804-03', price: '4,00', scale: [] },
+          { sku: 'AR1804-06', price: '5,50', scale: [] },
+        ],
+      }
+      try {
+        const res = await api()
+          .post('/api/imports/run').set('Cookie', cookie)
+          .send({ connectionKey: verbinding, capability: 'PRICE_TIERS', dryRun: true })
+          .expect(201)
+
+        expect(res.body.status).toBe('PARTIAL')
+        expect(res.body.itemsFailed).toBe(1)
+        expect(res.body.summary).toMatchObject({ updated: 0 })
+
+        const items = await prisma.unscoped.importItem.findMany({
+          where: { importRunId: res.body.importRunId, status: 'FAILED' },
+        })
+        expect(items[0].message).toContain('niet dezelfde inkoopprijs')
+        expect(items[0].message).toContain('AR1804-06: 5,50')
+      } finally {
+        antwoord = PRODUCT_ANTWOORD
+      }
+    })
+
+    it('weigert een prijsimport zonder vastgelegde catalogus', async () => {
+      const leeg = await prisma.unscoped.supplier.create({ data: { code: `${tag}-leeg`, name: 'Zonder catalogus' } })
+      const kale = await prisma.unscoped.supplierConnection.create({
+        data: {
+          supplierId: leeg.id,
+          key: `${tag}-leeg`,
+          connectorKey: 'midocean-api',
+          transport: 'REST',
+          config: { environment: 'test' },
+          credentials: new Uint8Array(app.get(CredentialsService).encrypt({ apiKey: 'x' })),
+          isActive: true,
+          capabilities: { create: [{ capability: 'PRICE_TIERS', priority: 10 }] },
+        },
+      })
+
+      const res = await api()
+        .post('/api/imports/run').set('Cookie', cookie)
+        .send({ connectionKey: `${tag}-leeg`, capability: 'PRICE_TIERS', dryRun: true })
+        .expect(422)
+      expect(res.body.error.message).toContain('eerst een catalogusimport')
+
+      await prisma.unscoped.supplierConnection.delete({ where: { id: kale.id } })
+      await prisma.unscoped.supplier.delete({ where: { id: leeg.id } })
     })
   })
 

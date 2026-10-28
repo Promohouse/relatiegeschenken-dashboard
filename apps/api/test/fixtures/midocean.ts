@@ -86,6 +86,34 @@ export const PRODUCT_ANTWOORD = [
   },
 ]
 
+/** Prijzen voor de varianten van AR1804, zoals een pricelist eruitziet. */
+export const PRIJS_VOOR_AR1804 = {
+  currency: 'EUR',
+  date: '2026-10-28',
+  price: [
+    {
+      sku: 'AR1804-03', variant_id: '10168709', price: '4,22', valid_until: '2027-01-31',
+      scale: [
+        { minimum_quantity: '1', price: '4,22' },
+        { minimum_quantity: '250', price: '4,07' },
+        { minimum_quantity: '500', price: '3,92' },
+        { minimum_quantity: '1000', price: '3,77' },
+      ],
+    },
+    {
+      sku: 'AR1804-06', variant_id: '10168710', price: '4,22', valid_until: '2027-01-31',
+      scale: [
+        { minimum_quantity: '1', price: '4,22' },
+        { minimum_quantity: '250', price: '4,07' },
+        { minimum_quantity: '500', price: '3,92' },
+        { minimum_quantity: '1000', price: '3,77' },
+      ],
+    },
+    // Een variant van een artikel dat wij niet hebben.
+    { sku: 'ZZ9999-01', variant_id: '1', price: '9,99', scale: [] },
+  ],
+}
+
 export const PRIJS_ANTWOORD = {
   currency: 'EUR',
   date: '2023-10-31',

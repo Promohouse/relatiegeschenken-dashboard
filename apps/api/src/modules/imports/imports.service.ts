@@ -1,20 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common'
 import type { ConnectorCapability, Prisma } from '@rgh/db'
-import { computePayloadHash } from '@rgh/contracts'
+import { computePayloadHash, parseSupplierDecimal } from '@rgh/contracts'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { AuditService } from '../../core/audit/audit.service'
 import { AppConfig } from '../../core/config/config.service'
 import { CredentialsService } from '../../core/connectors/credentials.service'
 import { ConnectorRegistry } from '../../core/connectors/connector.registry'
 import {
-  ConnectorError,
-  type CanonicalProduct, type ConnectorContext, type FetchedRecord,
+  type CanonicalPrice, type CanonicalProduct, type ConnectorContext, type FetchedRecord,
 } from '../../core/connectors/connector.types'
 import { NotFoundError, PreconditionError } from '../../core/errors/domain-errors'
 
 export interface RunOptions {
   /** Een proefimport berekent de verschillen en schrijft niets. */
   dryRun?: boolean
+}
+
+export interface RunSummary {
+  created: number
+  updated: number
+  unchanged: number
+  missing: number
+  /** Alleen bij prijzen: regels die bij geen enkel eigen artikel horen. */
+  unmatched?: number
 }
 
 export interface RunResult {
@@ -25,7 +33,7 @@ export interface RunResult {
   itemsChanged: number
   itemsFailed: number
   /** Nieuw, gewijzigd, ongewijzigd en ontbrekend - de samenvatting voor het scherm. */
-  summary: { created: number; updated: number; unchanged: number; missing: number }
+  summary: RunSummary
 }
 
 /** Wat we van onze eigen kant nodig hebben om te vergelijken. */
@@ -97,18 +105,33 @@ export class ImportsService {
         credentials: this.credentials.decrypt(verbinding.credentials),
       }
 
-      if (capability !== 'CATALOG') {
-        throw new PreconditionError(
-          `De capability ${capability} wordt nog niet door de importpijplijn verwerkt. ` +
-            'Op dit moment is dat alleen CATALOG.',
-        )
-      }
-      if (!connector.fetchCatalog) {
-        throw new PreconditionError(`Connector ${connector.key} kan geen catalogus ophalen.`)
+      let resultaat: {
+        itemsSeen: number
+        itemsChanged: number
+        itemsFailed: number
+        summary: RunSummary
       }
 
-      const records = await connector.fetchCatalog(context)
-      const resultaat = await this.verwerkCatalogus(run.id, verbinding, records, dryRun)
+      if (capability === 'CATALOG') {
+        if (!connector.fetchCatalog) {
+          throw new PreconditionError(`Connector ${connector.key} kan geen catalogus ophalen.`)
+        }
+        resultaat = await this.verwerkCatalogus(
+          run.id, verbinding, await connector.fetchCatalog(context), dryRun,
+        )
+      } else if (capability === 'PRICE_TIERS') {
+        if (!connector.fetchPrices) {
+          throw new PreconditionError(`Connector ${connector.key} kan geen prijzen ophalen.`)
+        }
+        resultaat = await this.verwerkPrijzen(
+          run.id, verbinding, await connector.fetchPrices(context),
+        )
+      } else {
+        throw new PreconditionError(
+          `De capability ${capability} wordt nog niet door de importpijplijn verwerkt. ` +
+            'Op dit moment zijn dat CATALOG en PRICE_TIERS.',
+        )
+      }
 
       await this.prisma.db.importRun.update({
         where: { id: run.id },
@@ -414,6 +437,209 @@ export class ImportsService {
     }
 
     return ontbrekend.length
+  }
+
+  // --- Prijzen -------------------------------------------------------------
+
+  /**
+   * Inkoopprijzen en staffels bijwerken.
+   *
+   * Eén ongemak van het koppelvlak: midocean geeft prijzen **per variant**
+   * (sku), terwijl onze inkoopprijs **per leveranciersartikel** staat. Bij
+   * promotieartikelen kosten alle kleuren meestal hetzelfde, maar niet altijd.
+   *
+   * Daarom wordt er niet gekozen. Verschillen de varianten van een artikel in
+   * prijs, dan komt dat als fout op de regel te staan met de bedragen erbij,
+   * en gebeurt er niets. Eén prijs verzinnen voor een artikel waarvan de
+   * kleuren verschillend kosten is precies het soort stille aanname dat later
+   * in een marge opduikt.
+   */
+  private async verwerkPrijzen(
+    importRunId: string,
+    verbinding: { id: string; supplierId: string },
+    records: FetchedRecord<CanonicalPrice>[],
+  ) {
+    const samenvatting: RunSummary = { created: 0, updated: 0, unchanged: 0, missing: 0, unmatched: 0 }
+    let itemsFailed = 0
+
+    const artikelPerSku = await this.skuNaarArtikel(verbinding)
+
+    // Eigen kant: inkoopprijs en staffels per leveranciersartikel.
+    const koppelingen = await this.prisma.db.productSupplier.findMany({
+      where: { supplierId: verbinding.supplierId },
+      select: {
+        id: true,
+        supplierArticleNumber: true,
+        purchasePrice: true,
+        currency: true,
+        purchaseTiers: { select: { minQuantity: true, unitPrice: true }, orderBy: { minQuantity: 'asc' } },
+      },
+    })
+    const perArtikel = new Map(koppelingen.map((k) => [k.supplierArticleNumber, k]))
+
+    // Regels groeperen op het artikel waar hun variant bij hoort.
+    const perArtikelPrijzen = new Map<string, FetchedRecord<CanonicalPrice>[]>()
+    for (const record of records) {
+      const artikel = artikelPerSku.get(record.value.sku)
+      if (!artikel || !perArtikel.has(artikel)) {
+        samenvatting.unmatched = (samenvatting.unmatched ?? 0) + 1
+        continue
+      }
+      const lijst = perArtikelPrijzen.get(artikel) ?? []
+      lijst.push(record)
+      perArtikelPrijzen.set(artikel, lijst)
+    }
+
+    for (const [artikel, prijzen] of perArtikelPrijzen) {
+      const koppeling = perArtikel.get(artikel)!
+      try {
+        const afwijkend = this.varianterPrijsverschil(prijzen)
+        if (afwijkend) {
+          itemsFailed++
+          await this.noteerItem(importRunId, artikel, 'FAILED', afwijkend)
+          continue
+        }
+
+        const bron = prijzen[0].value
+        const diff = this.prijsVerschil(koppeling, bron)
+        if (!diff) {
+          samenvatting.unchanged++
+          await this.noteerItem(importRunId, artikel, 'SKIPPED', 'Prijs en staffels ongewijzigd.')
+          continue
+        }
+
+        await this.prisma.db.stagedChange.create({
+          data: {
+            importRunId,
+            entityType: 'ProductSupplier',
+            entityId: koppeling.id,
+            externalId: artikel,
+            changeType: 'UPDATE',
+            diff: diff as Prisma.InputJsonValue,
+          },
+        })
+        samenvatting.updated++
+        await this.noteerItem(importRunId, artikel, 'OK')
+      } catch (fout) {
+        itemsFailed++
+        await this.noteerItem(
+          importRunId, artikel, 'FAILED',
+          fout instanceof Error ? fout.message : String(fout),
+        )
+      }
+    }
+
+    return {
+      itemsSeen: records.length,
+      itemsChanged: samenvatting.updated,
+      itemsFailed,
+      summary: samenvatting,
+    }
+  }
+
+  /**
+   * Van variantnummer naar leveranciersartikelnummer.
+   *
+   * Niet door de sku op te splitsen - dat is een aanname over hun
+   * naamgeving - maar uit de vastgelegde brondata van de catalogusimport.
+   * Daarom moet die eerst gedraaid zijn.
+   */
+  private async skuNaarArtikel(verbinding: { id: string; connectorKey?: string }) {
+    const rauw = await this.prisma.db.rawSupplierProduct.findMany({
+      where: { connectionId: verbinding.id },
+      select: { externalId: true, payload: true },
+    })
+
+    if (rauw.length === 0) {
+      throw new PreconditionError(
+        'Er is nog geen catalogus van deze leverancier vastgelegd, dus is niet te bepalen bij welk ' +
+          'artikel een prijsregel hoort. Draai eerst een catalogusimport zonder proefstand.',
+      )
+    }
+
+    const volledig = await this.prisma.db.supplierConnection.findUniqueOrThrow({
+      where: { id: verbinding.id },
+      select: { connectorKey: true },
+    })
+    const connector = this.registry.get(volledig.connectorKey, 'CATALOG')
+    if (!connector.parseProduct) {
+      throw new PreconditionError(
+        `Connector ${connector.key} kan opgeslagen brondata niet opnieuw vertalen.`,
+      )
+    }
+
+    const map = new Map<string, string>()
+    for (const rij of rauw) {
+      try {
+        for (const variant of connector.parseProduct(rij.payload).variants) {
+          map.set(variant.sku, rij.externalId)
+        }
+      } catch {
+        // Een onleesbare opgeslagen payload mag de prijsimport niet stoppen;
+        // de artikelen eromheen kunnen prima verwerkt worden.
+      }
+    }
+    return map
+  }
+
+  /** Null als alle varianten hetzelfde kosten, anders een uitleg. */
+  private varianterPrijsverschil(prijzen: FetchedRecord<CanonicalPrice>[]): string | null {
+    const kenmerk = (p: CanonicalPrice) =>
+      [
+        parseSupplierDecimal(p.unitPrice, 'price').toFixed(4),
+        ...p.tiers.map((t) => `${t.minimumQuantity}:${parseSupplierDecimal(t.unitPrice, 'scale').toFixed(4)}`),
+      ].join('|')
+
+    const eerste = kenmerk(prijzen[0].value)
+    const anders = prijzen.filter((p) => kenmerk(p.value) !== eerste)
+    if (anders.length === 0) return null
+
+    const voorbeelden = [prijzen[0], ...anders]
+      .slice(0, 4)
+      .map((p) => `${p.value.sku}: ${p.value.unitPrice}`)
+      .join(', ')
+
+    return (
+      'De varianten van dit artikel hebben niet dezelfde inkoopprijs ' +
+      `(${voorbeelden}). Onze catalogus kent één inkoopprijs per leveranciersartikel, dus hier ` +
+      'wordt niets gewijzigd. Zet de prijs met de hand, of laat de inkoopprijs per variant bouwen.'
+    )
+  }
+
+  /** Wat er aan prijs en staffels verandert; null als er niets verandert. */
+  private prijsVerschil(
+    koppeling: {
+      purchasePrice: { toString(): string }
+      currency: string
+      purchaseTiers: { minQuantity: number; unitPrice: { toString(): string } }[]
+    },
+    bron: CanonicalPrice,
+  ) {
+    const diff: Record<string, { van: unknown; naar: unknown }> = {}
+
+    const huidigePrijs = parseSupplierDecimal(koppeling.purchasePrice.toString(), 'purchasePrice').toFixed(4)
+    const nieuwePrijs = parseSupplierDecimal(bron.unitPrice, 'price').toFixed(4)
+    if (huidigePrijs !== nieuwePrijs) {
+      diff.purchasePrice = { van: huidigePrijs, naar: nieuwePrijs }
+    }
+
+    if (koppeling.currency !== bron.currency) {
+      diff.currency = { van: koppeling.currency, naar: bron.currency }
+    }
+
+    const huidigeStaffels = koppeling.purchaseTiers.map((t) => ({
+      minimumQuantity: t.minQuantity,
+      unitPrice: parseSupplierDecimal(t.unitPrice.toString(), 'staffel').toFixed(4),
+    }))
+    const nieuweStaffels = bron.tiers.map((t) => ({
+      minimumQuantity: t.minimumQuantity,
+      unitPrice: parseSupplierDecimal(t.unitPrice, 'staffel').toFixed(4),
+    }))
+    if (JSON.stringify(huidigeStaffels) !== JSON.stringify(nieuweStaffels)) {
+      diff.staffels = { van: huidigeStaffels, naar: nieuweStaffels }
+    }
+
+    return Object.keys(diff).length > 0 ? diff : null
   }
 
   // --- Opvragen ------------------------------------------------------------
