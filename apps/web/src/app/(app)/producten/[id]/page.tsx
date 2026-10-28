@@ -17,6 +17,19 @@ function Veld({ label, children }: { label: string; children: React.ReactNode })
 
 const ofStreepje = (waarde: string | null) => waarde ?? '—'
 
+const datum = (iso: string) =>
+  new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
+
+/** Hoe oud een voorraadstand is, in gewone woorden. */
+function ouderdom(iso: string): string {
+  const minuten = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (minuten < 60) return `${Math.max(0, minuten)} min geleden`
+  const uren = Math.round(minuten / 60)
+  if (uren < 24) return `${uren} uur geleden`
+  const dagen = Math.round(uren / 24)
+  return dagen === 1 ? 'gisteren' : `${dagen} dagen geleden`
+}
+
 export default async function ProductPagina({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const user = await getCurrentUser()
@@ -62,6 +75,12 @@ export default async function ProductPagina({ params }: { params: Promise<{ id: 
                 : formatEuro(product.purchasePrice)}
             </p>
             <p className="text-xs uppercase tracking-wide text-ink-faint">Inkoop vanaf 1</p>
+          </div>
+          <div>
+            <p className={`text-2xl font-bold tabular ${product.stockQuantity === 0 ? 'text-alarm' : ''}`}>
+              {product.stockQuantity ?? '—'}
+            </p>
+            <p className="text-xs uppercase tracking-wide text-ink-faint">Op voorraad</p>
           </div>
         </div>
       </div>
@@ -169,7 +188,7 @@ export default async function ProductPagina({ params }: { params: Promise<{ id: 
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-rule text-left">
-                  {['Variantnummer', 'Kleur', 'Code', 'Pantone', 'Maat', 'EAN', 'Status'].map((k) => (
+                  {['Variantnummer', 'Kleur', 'Code', 'Maat', 'EAN', 'Voorraad', 'Status'].map((k) => (
                     <th key={k} className="pb-2 pr-4 text-xs font-medium uppercase tracking-wide text-ink-faint">
                       {k}
                     </th>
@@ -189,10 +208,30 @@ export default async function ProductPagina({ params }: { params: Promise<{ id: 
                     <td className="py-2 pr-4 font-[family-name:var(--font-mono)] text-xs">
                       {ofStreepje(v.colorCode)}
                     </td>
-                    <td className="py-2 pr-4 text-ink-soft">{ofStreepje(v.pmsColor)}</td>
                     <td className="py-2 pr-4">{ofStreepje(v.size)}</td>
                     <td className="py-2 pr-4 font-[family-name:var(--font-mono)] text-xs text-ink-soft tabular">
                       {ofStreepje(v.eanCode)}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {v.stock === null ? (
+                        <span className="text-ink-faint" title="De leverancier heeft hier geen voorraad voor gemeld">
+                          onbekend
+                        </span>
+                      ) : (
+                        <>
+                          <span className={`tabular ${v.stock.quantity === 0 ? 'text-alarm' : ''}`}>
+                            {v.stock.quantity}
+                          </span>
+                          <span className="block text-xs text-ink-faint">
+                            {ouderdom(v.stock.fetchedAt)}
+                          </span>
+                          {v.stock.firstArrivalDate && v.stock.firstArrivalQuantity !== null && (
+                            <span className="block text-xs text-ink-soft">
+                              +{v.stock.firstArrivalQuantity} op {datum(v.stock.firstArrivalDate)}
+                            </span>
+                          )}
+                        </>
+                      )}
                     </td>
                     <td className="py-2">
                       {v.isActive ? (
@@ -209,7 +248,8 @@ export default async function ProductPagina({ params }: { params: Promise<{ id: 
         )}
         <p className="mt-3 text-xs text-ink-faint">
           Een variant die de leverancier niet meer levert gaat op inactief en wordt nooit verwijderd:
-          er kunnen orderregels aan hangen.
+          er kunnen orderregels aan hangen. Voorraad is wat de leverancier laatst meldde, geen
+          toezegging — vandaar het tijdstip erbij. Hij wordt twee keer per dag opgehaald.
         </p>
       </section>
 

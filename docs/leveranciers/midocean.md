@@ -63,7 +63,7 @@ Alle GET. Zonder `Accept`-header is het antwoord JSON.
 
 | Doel | Endpoint | Ververst |
 |---|---|---|
-| Voorraad | `/gateway/stock/2.0` | elk uur |
+| Voorraad | `/gateway/stock/2.0` | elk uur bij midocean; wij halen 2x per dag op |
 | Productinformatie | `/gateway/products/2.0?language=nl` | dagelijks |
 | Drukgegevens | `/gateway/printdata/1.0` | dagelijks |
 | Productprijzen (onze inkoop) | `/gateway/pricelist/2.0` | dagelijks |

@@ -35,6 +35,8 @@ export const productSummarySchema = z.object({
   supplierArticleNumber: z.string().nullable(),
   purchasePrice: z.string().nullable(),
   currency: z.string().nullable(),
+  /** Opgetelde voorraad over de varianten; null als er niets bekend is. */
+  stockQuantity: z.number().int().nullable(),
 })
 
 export const productVariantSchema = z.object({
@@ -47,6 +49,21 @@ export const productVariantSchema = z.object({
   size: z.string().nullable(),
   eanCode: z.string().nullable(),
   isActive: z.boolean(),
+  /**
+   * Laatst bekende voorraad bij de leverancier. Null betekent: niet bekend,
+   * wat iets anders is dan nul. Een stand hoort altijd met zijn tijdstip
+   * getoond te worden - zie ADR-0015.
+   */
+  stock: z
+    .object({
+      quantity: z.number().int(),
+      fetchedAt: z.string(),
+      firstArrivalDate: z.string().nullable(),
+      firstArrivalQuantity: z.number().int().nullable(),
+      nextArrivalDate: z.string().nullable(),
+      nextArrivalQuantity: z.number().int().nullable(),
+    })
+    .nullable(),
 })
 
 export const productSupplierSchema = z.object({

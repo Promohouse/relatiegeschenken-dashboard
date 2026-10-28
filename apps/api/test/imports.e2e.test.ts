@@ -99,6 +99,7 @@ describe('importpijplijn', () => {
   }, 60000)
 
   afterAll(async () => {
+    await prisma.unscoped.supplierStock.deleteMany({ where: { connectionId } })
     await prisma.unscoped.supplierConnection.deleteMany({ where: { supplierId } })
     const uitImport = await prisma.unscoped.productSupplier.findMany({
       where: { supplierId }, select: { productId: true },
@@ -154,8 +155,8 @@ describe('importpijplijn', () => {
 
     // Geen ruwe rij: anders zou een tweede proefimport niets meer melden.
     expect(await prisma.unscoped.rawSupplierProduct.count({ where: { connectionId } })).toBe(0)
-    // En zeker geen product.
-    expect(await prisma.unscoped.product.count({ where: { articleNumber: 'AR1804' } })).toBe(0)
+    // En zeker geen product bij deze leverancier.
+    expect(await prisma.unscoped.productSupplier.count({ where: { supplierId } })).toBe(0)
   })
 
   it('toont per artikel wat er zou veranderen', async () => {
@@ -187,7 +188,7 @@ describe('importpijplijn', () => {
 
     // De catalogus is nog steeds niet aangeraakt: dat gebeurt pas na
     // beoordeling van de voorgestelde wijzigingen (ADR-0004).
-    expect(await prisma.unscoped.product.count({ where: { articleNumber: 'AR1804' } })).toBe(0)
+    expect(await prisma.unscoped.productSupplier.count({ where: { supplierId } })).toBe(0)
 
     const verbindingNa = await prisma.unscoped.supplierConnection.findUniqueOrThrow({ where: { id: connectionId } })
     expect(verbindingNa.lastRunAt).not.toBeNull()
@@ -214,7 +215,18 @@ describe('importpijplijn', () => {
     let productId = ''
 
     beforeAll(async () => {
-      productId = (await prisma.unscoped.product.create({
+      // Resten van een eerder afgebroken run opruimen: AR1804 komt uit de
+    // voorbeelddata van midocean en heeft geen eigen voorvoegsel, dus zonder
+    // dit blokkeert een mislukte run alle volgende.
+    const oud = await prisma.unscoped.product.findFirst({ where: { articleNumber: 'AR1804' } })
+    if (oud) {
+      await prisma.unscoped.auditLog.deleteMany({ where: { entityId: oud.id } })
+      await prisma.unscoped.productSupplier.deleteMany({ where: { productId: oud.id } })
+      await prisma.unscoped.productVariant.deleteMany({ where: { productId: oud.id } })
+      await prisma.unscoped.product.delete({ where: { id: oud.id } })
+    }
+
+    productId = (await prisma.unscoped.product.create({
         data: {
           articleNumber: `${tag}-AR1804`,
           name: 'Oude naam',
@@ -659,6 +671,125 @@ describe('importpijplijn', () => {
     })
   })
 
+  describe('voorraad', () => {
+    beforeAll(async () => {
+      await prisma.unscoped.supplierConnectionCapability.upsert({
+        where: { connectionId_capability: { connectionId, capability: 'INVENTORY' } },
+        update: { isEnabled: true },
+        create: { connectionId, capability: 'INVENTORY', priority: 10 },
+      })
+    })
+
+    const voorraadImport = async (stock: unknown[], dryRun = false) => {
+      antwoord = { modified_at: new Date().toISOString(), stock }
+      try {
+        return await api()
+          .post('/api/imports/run').set('Cookie', cookie)
+          .send({ connectionKey: verbinding, capability: 'INVENTORY', dryRun })
+          .expect(201)
+      } finally {
+        antwoord = PRODUCT_ANTWOORD
+      }
+    }
+
+    it('schrijft bij een proefimport niets weg', async () => {
+      const res = await voorraadImport(
+        [{ sku: 'AR1804-03', qty: 811 }],
+        true,
+      )
+      expect(res.body.summary).toMatchObject({ created: 1 })
+      expect(await prisma.unscoped.supplierStock.count({ where: { connectionId } })).toBe(0)
+    })
+
+    it('legt de stand vast en koppelt hem aan onze variant', async () => {
+      const res = await voorraadImport([
+        {
+          sku: 'AR1804-03', qty: 811,
+          first_arrival_date: '2026-11-25', first_arrival_qty: 3000,
+          next_arrival_date: '2026-12-22', next_arrival_qty: 5000,
+        },
+        // Een artikel dat wij niet hebben: wel bewaren, apart tellen.
+        { sku: 'ZZ9999-01', qty: 5 },
+      ])
+
+      expect(res.body.summary).toMatchObject({ created: 2, unchanged: 0 })
+      expect(res.body.summary.unmatched).toBe(1)
+
+      const gekoppeld = await prisma.unscoped.supplierStock.findFirstOrThrow({
+        where: { connectionId, sku: 'AR1804-03' },
+        include: { variant: true },
+      })
+      expect(gekoppeld.quantity).toBe(811)
+      expect(gekoppeld.variant?.sku).toBe('AR1804-03')
+      expect(gekoppeld.firstArrivalQuantity).toBe(3000)
+      expect(gekoppeld.nextArrivalQuantity).toBe(5000)
+
+      const los = await prisma.unscoped.supplierStock.findFirstOrThrow({
+        where: { connectionId, sku: 'ZZ9999-01' },
+      })
+      expect(los.variantId).toBeNull()
+    })
+
+    it('ververst het tijdstip ook als de stand gelijk blijft', async () => {
+      const voor = await prisma.unscoped.supplierStock.findFirstOrThrow({
+        where: { connectionId, sku: 'AR1804-03' },
+      })
+
+      const res = await voorraadImport([{ sku: 'AR1804-03', qty: 811 }])
+      expect(res.body.summary).toMatchObject({ created: 0, updated: 0, unchanged: 1 })
+
+      const na = await prisma.unscoped.supplierStock.findFirstOrThrow({
+        where: { connectionId, sku: 'AR1804-03' },
+      })
+      // Een voorraadstand zonder actueel tijdstip is waardeloos, dus die gaat
+      // mee ook als het aantal niet wijzigde.
+      expect(na.fetchedAt.getTime()).toBeGreaterThan(voor.fetchedAt.getTime())
+    })
+
+    it('telt een gewijzigde stand als wijziging', async () => {
+      const res = await voorraadImport([{ sku: 'AR1804-03', qty: 400 }])
+      expect(res.body.summary).toMatchObject({ created: 0, updated: 1, unchanged: 0 })
+
+      const na = await prisma.unscoped.supplierStock.findFirstOrThrow({
+        where: { connectionId, sku: 'AR1804-03' },
+      })
+      expect(na.quantity).toBe(400)
+    })
+
+    it('maakt geen voorstellen aan: voorraad gaat buiten de beoordeling om', async () => {
+      const res = await voorraadImport([{ sku: 'AR1804-03', qty: 410 }])
+      const changes = await api()
+        .get(`/api/imports/runs/${res.body.importRunId}/changes`).set('Cookie', cookie).expect(200)
+      expect(changes.body).toHaveLength(0)
+    })
+
+    it('toont de stand op het product, met het tijdstip erbij', async () => {
+      const recht = await prisma.unscoped.permission.upsert({
+        where: { key: 'products:view' }, update: {},
+        create: { key: 'products:view', module: 'products', action: 'view' },
+      })
+      const rol = await prisma.unscoped.role.findFirstOrThrow({ where: { key: `${tag}-rol` } })
+      await prisma.unscoped.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: rol.id, permissionId: recht.id } },
+        update: {},
+        create: { roleId: rol.id, permissionId: recht.id },
+      })
+
+      const product = await prisma.unscoped.product.findFirstOrThrow({ where: { articleNumber: 'AR1804' } })
+      const res = await api().get(`/api/products/${product.id}`).set('Cookie', cookie).expect(200)
+
+      const zwart = res.body.variants.find((v: { sku: string }) => v.sku === 'AR1804-03')
+      expect(zwart.stock).toMatchObject({ quantity: 410 })
+      expect(zwart.stock.fetchedAt).toBeTruthy()
+
+      // Een variant zonder gemelde voorraad krijgt null, niet nul.
+      const blauw = res.body.variants.find((v: { sku: string }) => v.sku === 'AR1804-06')
+      expect(blauw.stock).toBeNull()
+
+      expect(res.body.stockQuantity).toBe(410)
+    })
+  })
+
   describe('weigeringen', () => {
     it('weigert een koppeling die niet bestaat', async () => {
       await api()
@@ -669,9 +800,9 @@ describe('importpijplijn', () => {
 
     it('weigert een capability die uit staat', async () => {
       const cap = await prisma.unscoped.supplierConnectionCapability.create({
-        data: { connectionId, capability: 'INVENTORY', isEnabled: false },
+        data: { connectionId, capability: 'MEDIA', isEnabled: false },
       })
-      const res = await start({ capability: 'INVENTORY' }).expect(422)
+      const res = await start({ capability: 'MEDIA' }).expect(422)
       expect(res.body.error.message).toContain('staat uit')
       await prisma.unscoped.supplierConnectionCapability.delete({ where: { id: cap.id } })
     })

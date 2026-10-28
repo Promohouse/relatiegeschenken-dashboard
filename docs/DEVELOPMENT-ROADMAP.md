@@ -59,6 +59,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ◻ | Handmatige invoer | een product volledig aanmaken zonder import |
 | ◻ | **CSV/XLSX-import** met diff-review | proefimport toont wijzigingen vóór toepassen; ontbrekende producten worden gemarkeerd, **niet verwijderd** |
 | ✅ | Connectorlaag en midocean-koppeling | gereed: versleutelde credentials, connector-register, midocean REST (catalogus, prijzen, voorraad), proefimport die niets wegschrijft, verschillen in `staged_changes`, ontbrekende artikelen als voorstel tot inactief. Toepassen volgt |
+| ✅ | Voorraadimport | gereed: standen per variant, twee keer per dag, rechtstreeks weggeschreven zonder beoordeling (ADR-0015); op het productscherm met het tijdstip en de eerstvolgende levering erbij |
 | ✅ | Prijsimport (inkoopprijzen en staffels) | gereed: prijzen per variant gekoppeld aan het artikel via de vastgelegde catalogus; verschillende prijzen binnen één artikel worden gemeld en niet gekozen; staffels worden vervangen, niet gestapeld |
 | ✅ | Voorgestelde wijzigingen beoordelen en toepassen | gereed: scherm met het verschil per veld, per voorstel toepassen of afwijzen en alles-in-één-keer; een voorstel dat achterhaald is wordt geweigerd; een verdwenen variant gaat op inactief, nooit weg |
 | ◻ | Mapping-UI | veld-, categorie-, kleur- en techniekmapping per bron instelbaar |

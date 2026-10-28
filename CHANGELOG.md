@@ -6,6 +6,18 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **Voorraadimport.** Standen per variant, met de eerstvolgende twee verwachte
+  leveringen. Op het productscherm staat per variant het aantal met erbij hoe
+  oud die stand is, en in de kop de opgetelde voorraad.
+- Voorraad gaat **buiten de beoordeling om** (ADR-0015). Dat is een bewuste
+  uitzondering op ADR-0004: een voorraadstand is een meting en geen eigenschap,
+  hij overschrijft niets van ons, en bij twee ophaalmomenten per dag zou
+  goedkeuren een ritueel worden dat de voorstellen die er wél toe doen laat
+  ondersneeuwen.
+- "Onbekend" en "nul" zijn in het scherm uit elkaar gehouden: een variant
+  waarvoor de leverancier niets meldde staat op *onbekend*, nul op voorraad
+  staat in rood. Dat verschil is bij het offreren precies het verschil dat
+  telt.
 - **Productcatalogus in het scherm** (`/producten`). Zoeken op artikelnummer,
   naam, merk, variantnummer en leveranciersartikelnummer; filteren op status en
   leverancier; sorteren en pagineren. Het detail toont kenmerken, varianten met

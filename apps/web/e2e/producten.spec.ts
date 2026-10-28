@@ -88,6 +88,20 @@ test.describe('producten', () => {
     await expect(page.getByRole('heading', { name: 'Bedrukopties' })).toBeVisible()
   })
 
+  test('zegt onbekend als de leverancier geen voorraad meldde', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/producten')
+    await page.getByRole('link', { name: 'Thermosbeker Rivo 350 ml' }).click()
+
+    const varianten = page.locator('section', { has: page.getByRole('heading', { name: 'Varianten' }) })
+    // Onbekend is iets anders dan nul, en dat hoort te zien te zijn.
+    await expect(varianten.getByText('onbekend').first()).toBeVisible()
+    await expect(page.getByText('Op voorraad')).toBeVisible()
+    await expect(
+      page.getByText(/Voorraad is wat de leverancier laatst meldde, geen toezegging/),
+    ).toBeVisible()
+  })
+
   test('geeft een duidelijke pagina voor een product dat niet bestaat', async ({ page }) => {
     await logIn(page)
     const res = await page.goto('/producten/00000000-0000-0000-0000-000000000000')

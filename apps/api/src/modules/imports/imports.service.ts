@@ -7,7 +7,8 @@ import { AppConfig } from '../../core/config/config.service'
 import { CredentialsService } from '../../core/connectors/credentials.service'
 import { ConnectorRegistry } from '../../core/connectors/connector.registry'
 import {
-  type CanonicalPrice, type CanonicalProduct, type ConnectorContext, type FetchedRecord,
+  type CanonicalPrice, type CanonicalProduct, type CanonicalStock,
+  type ConnectorContext, type FetchedRecord,
 } from '../../core/connectors/connector.types'
 import { NotFoundError, PreconditionError } from '../../core/errors/domain-errors'
 
@@ -126,10 +127,17 @@ export class ImportsService {
         resultaat = await this.verwerkPrijzen(
           run.id, verbinding, await connector.fetchPrices(context),
         )
+      } else if (capability === 'INVENTORY') {
+        if (!connector.fetchStock) {
+          throw new PreconditionError(`Connector ${connector.key} kan geen voorraad ophalen.`)
+        }
+        resultaat = await this.verwerkVoorraad(
+          run.id, verbinding, await connector.fetchStock(context), dryRun,
+        )
       } else {
         throw new PreconditionError(
           `De capability ${capability} wordt nog niet door de importpijplijn verwerkt. ` +
-            'Op dit moment zijn dat CATALOG en PRICE_TIERS.',
+            'Op dit moment zijn dat CATALOG, PRICE_TIERS en INVENTORY.',
         )
       }
 
@@ -640,6 +648,105 @@ export class ImportsService {
     }
 
     return Object.keys(diff).length > 0 ? diff : null
+  }
+
+  // --- Voorraad ------------------------------------------------------------
+
+  /**
+   * Voorraadstanden wegschrijven.
+   *
+   * Zonder beoordeling, anders dan catalogus en prijzen: een voorraadstand is
+   * een meting en geen eigenschap, hij overschrijft niets van ons, en bij twee
+   * ophaalmomenten per dag zou goedkeuren een ritueel worden. Zie ADR-0015.
+   *
+   * Standen van artikelen die wij niet hebben worden wel bewaard. Dat kost
+   * weinig en voorkomt een gat: komt het artikel later binnen, dan is de
+   * voorraad er al.
+   */
+  private async verwerkVoorraad(
+    importRunId: string,
+    verbinding: { id: string },
+    records: FetchedRecord<CanonicalStock>[],
+    dryRun: boolean,
+  ) {
+    const samenvatting: RunSummary = { created: 0, updated: 0, unchanged: 0, missing: 0, unmatched: 0 }
+    let itemsFailed = 0
+
+    const bekend = await this.prisma.db.supplierStock.findMany({
+      where: { connectionId: verbinding.id },
+      select: { sku: true, quantity: true, variantId: true },
+    })
+    const huidig = new Map(bekend.map((r) => [r.sku, r]))
+
+    // De koppeling met onze eigen varianten, in één query: een variantnummer
+    // is uniek over de hele catalogus.
+    const skus = records.map((r) => r.value.sku)
+    const varianten = await this.prisma.db.productVariant.findMany({
+      where: { sku: { in: skus } },
+      select: { id: true, sku: true },
+    })
+    const variantPerSku = new Map(varianten.map((v) => [v.sku, v.id]))
+
+    const nu = new Date()
+    for (const record of records) {
+      const stand = record.value
+      try {
+        const variantId = variantPerSku.get(stand.sku) ?? null
+        if (!variantId) samenvatting.unmatched = (samenvatting.unmatched ?? 0) + 1
+
+        const vorig = huidig.get(stand.sku)
+        const gewijzigd = !vorig || vorig.quantity !== stand.quantity || vorig.variantId !== variantId
+
+        if (!gewijzigd) {
+          samenvatting.unchanged++
+        } else if (vorig) {
+          samenvatting.updated++
+        } else {
+          samenvatting.created++
+        }
+
+        if (dryRun) continue
+
+        // Ook een ongewijzigde stand wordt weggeschreven: dan klopt `fetchedAt`,
+        // en dat is bij voorraad het halve verhaal.
+        await this.prisma.db.supplierStock.upsert({
+          where: { connectionId_sku: { connectionId: verbinding.id, sku: stand.sku } },
+          update: {
+            variantId,
+            quantity: stand.quantity,
+            firstArrivalDate: stand.firstArrivalDate,
+            firstArrivalQuantity: stand.firstArrivalQuantity,
+            nextArrivalDate: stand.nextArrivalDate,
+            nextArrivalQuantity: stand.nextArrivalQuantity,
+            fetchedAt: nu,
+          },
+          create: {
+            connectionId: verbinding.id,
+            sku: stand.sku,
+            variantId,
+            quantity: stand.quantity,
+            firstArrivalDate: stand.firstArrivalDate,
+            firstArrivalQuantity: stand.firstArrivalQuantity,
+            nextArrivalDate: stand.nextArrivalDate,
+            nextArrivalQuantity: stand.nextArrivalQuantity,
+            fetchedAt: nu,
+          },
+        })
+      } catch (fout) {
+        itemsFailed++
+        await this.noteerItem(
+          importRunId, stand.sku, 'FAILED',
+          fout instanceof Error ? fout.message : String(fout),
+        )
+      }
+    }
+
+    return {
+      itemsSeen: records.length,
+      itemsChanged: samenvatting.created + samenvatting.updated,
+      itemsFailed,
+      summary: samenvatting,
+    }
   }
 
   // --- Opvragen ------------------------------------------------------------

@@ -641,6 +641,8 @@ model ProductVariant {
 
   quoteItems QuoteItem[]
 
+  supplierStock SupplierStock[]
+
   @@index([productId])
   @@map("product_variants")
 }
@@ -1481,6 +1483,7 @@ model SupplierConnection {
   capabilities  SupplierConnectionCapability[]
   importRuns    ImportRun[]
   rawProducts   RawSupplierProduct[]
+  stock         SupplierStock[]
   fieldMappings FieldMapping[]
   valueMappings ValueMapping[]
 
@@ -1574,6 +1577,44 @@ model ImportItem {
 
 /// Ruwe leveranciersdata, onaangetast bewaard. De hash voorkomt dat
 /// ongewijzigde artikelen opnieuw verwerkt worden.
+/// Voorraadstand zoals een leverancier die laatst meldde.
+///
+/// Dit is geen catalogusgegeven maar een meting met een tijdstip: het zegt
+/// niets over wat een product *is*, alleen wat er op dat moment lag. Daarom
+/// gaat voorraad niet door de beoordeling van `staged_changes` heen maar
+/// rechtstreeks hierheen - zie ADR-0015. Onze eigen gegevens worden er nooit
+/// door overschreven, want deze tabel bevat uitsluitend wat de leverancier zei.
+model SupplierStock {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  /// Variantnummer bij de leverancier.
+  sku String
+
+  /// De eigen variant, als we het artikel hebben. Leeg betekent: de
+  /// leverancier meldt voorraad van iets dat niet in onze catalogus staat.
+  /// SetNull, want het verwijderen van een variant mag een meting niet
+  /// meeslepen.
+  variantId String?         @db.Uuid
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  quantity Int
+
+  /// De eerstvolgende twee verwachte leveringen, als de leverancier die geeft.
+  firstArrivalDate     DateTime?
+  firstArrivalQuantity Int?
+  nextArrivalDate      DateTime?
+  nextArrivalQuantity  Int?
+
+  /// Wanneer wij dit ophaalden. Een voorraadstand zonder tijdstip is waardeloos.
+  fetchedAt DateTime @default(now())
+
+  @@unique([connectionId, sku])
+  @@index([variantId])
+  @@map("supplier_stock")
+}
+
 model RawSupplierProduct {
   id           String             @id @default(uuid()) @db.Uuid
   connectionId String             @db.Uuid

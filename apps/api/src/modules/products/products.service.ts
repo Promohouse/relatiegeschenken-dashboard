@@ -5,6 +5,7 @@ import type {
 } from '@rgh/contracts'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { NotFoundError } from '../../core/errors/domain-errors'
+import { SupplierStockService } from '../imports/supplier-stock.service'
 
 /**
  * De productcatalogus: opzoeken, doorbladeren en bekijken.
@@ -18,7 +19,10 @@ import { NotFoundError } from '../../core/errors/domain-errors'
  */
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stock: SupplierStockService,
+  ) {}
 
   async list(query: ListProductsQuery): Promise<PaginatedProducts> {
     const where: Prisma.ProductWhereInput = {}
@@ -64,8 +68,10 @@ export class ProductsService {
       this.prisma.db.product.count({ where }),
     ])
 
+    const voorraad = await this.stock.totalsForProducts(rijen.map((p) => p.id))
+
     return {
-      items: rijen.map((p) => this.naarSamenvatting(p)),
+      items: rijen.map((p) => this.naarSamenvatting(p, voorraad.get(p.id) ?? null)),
       total,
       page: query.page,
       pageSize: query.pageSize,
@@ -98,8 +104,11 @@ export class ProductsService {
     })
     if (!product) throw new NotFoundError('Dit product bestaat niet.')
 
+    const voorraad = await this.stock.forVariants(product.variants.map((v) => v.id))
+    const totaal = [...voorraad.values()].reduce((som, s) => som + s.quantity, 0)
+
     return {
-      ...this.naarSamenvatting(product),
+      ...this.naarSamenvatting(product, voorraad.size > 0 ? totaal : null),
       description: product.description,
       material: product.material,
       dimensions: product.dimensions,
@@ -118,6 +127,7 @@ export class ProductsService {
         size: v.size,
         eanCode: v.eanCode,
         isActive: v.isActive,
+        stock: this.naarVoorraad(voorraad.get(v.id)),
       })),
       suppliers: product.suppliers.map((s) => ({
         id: s.id,
@@ -179,6 +189,26 @@ export class ProductsService {
     return product
   }
 
+  /** Null blijft null: niet bekend is iets anders dan nul op voorraad. */
+  private naarVoorraad(stand: {
+    quantity: number
+    fetchedAt: Date
+    firstArrivalDate: Date | null
+    firstArrivalQuantity: number | null
+    nextArrivalDate: Date | null
+    nextArrivalQuantity: number | null
+  } | undefined) {
+    if (!stand) return null
+    return {
+      quantity: stand.quantity,
+      fetchedAt: stand.fetchedAt.toISOString(),
+      firstArrivalDate: stand.firstArrivalDate?.toISOString() ?? null,
+      firstArrivalQuantity: stand.firstArrivalQuantity,
+      nextArrivalDate: stand.nextArrivalDate?.toISOString() ?? null,
+      nextArrivalQuantity: stand.nextArrivalQuantity,
+    }
+  }
+
   private naarSamenvatting(product: {
     id: string
     articleNumber: string
@@ -194,7 +224,7 @@ export class ProductsService {
       currency: string
       supplier: { name: string }
     }[]
-  }): ProductSummary {
+  }, stockQuantity: number | null): ProductSummary {
     const voorkeur = product.suppliers[0]
     return {
       id: product.id,
@@ -209,6 +239,7 @@ export class ProductsService {
       supplierArticleNumber: voorkeur?.supplierArticleNumber ?? null,
       purchasePrice: voorkeur?.purchasePrice.toString() ?? null,
       currency: voorkeur?.currency ?? null,
+      stockQuantity,
     }
   }
 }

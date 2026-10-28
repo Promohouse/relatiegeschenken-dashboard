@@ -137,6 +137,9 @@ export default async function ProductenPagina({
                 Varianten
               </th>
               <th scope="col" className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wide text-ink-faint">
+                Voorraad
+              </th>
+              <th scope="col" className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wide text-ink-faint">
                 Inkoopprijs
               </th>
             </tr>
@@ -167,6 +170,17 @@ export default async function ProductenPagina({
                 </td>
                 <td className="px-4 py-2.5 text-right tabular">{product.variantCount}</td>
                 <td className="px-4 py-2.5 text-right tabular">
+                  {product.stockQuantity === null ? (
+                    <span className="text-ink-faint" title="De leverancier heeft hier geen voorraad voor gemeld">
+                      —
+                    </span>
+                  ) : (
+                    <span className={product.stockQuantity === 0 ? 'text-alarm' : ''}>
+                      {product.stockQuantity}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-right tabular">
                   {product.purchasePrice === null ? (
                     <span className="text-ink-faint">—</span>
                   ) : Number(product.purchasePrice) === 0 ? (
@@ -182,7 +196,7 @@ export default async function ProductenPagina({
 
             {data.items.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-sm text-ink-soft">
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-ink-soft">
                   Geen producten gevonden
                   {params.search && <> voor “{params.search}”</>}. Producten komen uit een import;
                   kijk bij <Link href="/imports" className="text-accent hover:underline">Imports</Link>.
