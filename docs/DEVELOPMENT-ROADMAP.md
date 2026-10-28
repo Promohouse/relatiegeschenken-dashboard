@@ -58,6 +58,8 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ◻ | Productoverzicht en -detail | varianten, staffels, bedrukopties, media |
 | ◻ | Handmatige invoer | een product volledig aanmaken zonder import |
 | ◻ | **CSV/XLSX-import** met diff-review | proefimport toont wijzigingen vóór toepassen; ontbrekende producten worden gemarkeerd, **niet verwijderd** |
+| ✅ | Connectorlaag en midocean-koppeling | gereed: versleutelde credentials, connector-register, midocean REST (catalogus, prijzen, voorraad), proefimport die niets wegschrijft, verschillen in `staged_changes`, ontbrekende artikelen als voorstel tot inactief. Toepassen volgt |
+| ◻ | Voorgestelde wijzigingen beoordelen en toepassen | per wijziging goedkeuren of afwijzen; toepassen schrijft naar de catalogus en logt wie het deed |
 | ◻ | Mapping-UI | veld-, categorie-, kleur- en techniekmapping per bron instelbaar |
 | ◻ | Veldeigendom | een handmatig gewijzigd veld wordt door geen import overschreven; test |
 | ◻ | Leveranciersbeheer | artikelreferenties, inkoopprijzen, levertijden, documenten |

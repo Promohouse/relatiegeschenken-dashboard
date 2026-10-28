@@ -6,6 +6,28 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **De connectorlaag.** Een koppeling haalt op en vertaalt naar één neutrale
+  vorm; wegschrijven doet de importpijplijn. Credentials staan versleuteld in
+  de database (AES-256-GCM met een eigen salt per rij), niet in de code of in
+  `.env` per leverancier — een gewijzigde rij ontsleutelt niet maar faalt.
+- **midocean-connector**: catalogus, prijzen en voorraad, getest tegen de
+  voorbeeldantwoorden uit hun eigen handleiding. De foutmeldingen uit hun
+  Appendix C zijn vertaald naar iets bruikbaars: een 401 kan ook betekenen dat
+  de sleutel niet geabonneerd is op dat endpoint, en een 503 op de
+  testomgeving is 's avonds normaal en geen storing.
+- **Importpijplijn met proefimport.** Standaard verandert een import niets: hij
+  haalt op, vergelijkt en toont wat er zou veranderen. Een echte import legt
+  alleen de ruwe leveranciersdata vast; de catalogus wijzigt pas na
+  beoordeling (ADR-0004). Een artikel dat uit de bron verdwijnt levert een
+  voorstel op om het op inactief te zetten — een import verwijdert nooit een
+  product (harde regel 12).
+- Twee veiligheidsgrenzen in die pijplijn: een koppeling die naar de
+  productieomgeving van de leverancier wijst wordt geweigerd op een
+  niet-productieomgeving, en een mislukte import wordt vastgelegd met de reden
+  in plaats van stil te vallen.
+- Productkenmerken die leveranciers aanleveren: materiaal, afmetingen, land van
+  herkomst, goederencode en bedrukbaarheid op het product; kleurcode,
+  kleurgroep en Pantone-aanduiding op de variant.
 - **midocean-koppeling vastgelegd op hun eigen documentatie.** De officiele
   handleiding (v1.12.2) is ontvangen en verwerkt in
   `docs/leveranciers/midocean.md` en ADR-0013. Daarmee is de koppeling voor het
@@ -161,6 +183,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- **De importvergelijking draait nu altijd** (ADR-0014, corrigeert ADR-0013).
+  Eerst besliste de hash van de leveranciersdata of er überhaupt vergeleken
+  werd. Dat mist twee gevallen: een artikel dat pas later aan een eigen product
+  gekoppeld wordt, en een wijziging die aan onze kant is gemaakt. In beide
+  gevallen verdween het voorstel voorgoed. Nu bepaalt de hash alleen of de
+  ruwe payload opnieuw wordt vastgelegd, en betekent "ongewijzigd" in de
+  uitslag: er is geen verschil tussen de bron en onze catalogus.
 - **Wijzigingsschema's laten weggelaten velden nu echt weg.** `.partial()` in
   Zod maakt een veld optioneel maar laat `.default()` staan: een PATCH met
   alleen een naam zette daardoor ook `endOfMonth`, `sort` en de standaardvlag

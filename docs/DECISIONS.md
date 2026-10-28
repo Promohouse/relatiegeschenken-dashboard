@@ -20,7 +20,8 @@ nieuwe die de oude vervangt.
 | [0010](architecture/0010-deployment-decorsign-k3s-argocd.md) | Deployment op Decorsign K3s via ArgoCD, GitOps, twee namespaces | besloten 2026-10-28; drie punten bij Decorsign open |
 | [0011](architecture/0011-validatie-en-openapi-uit-zod.md) | Zod als enige bron voor validatie, types en documentatie | besloten 2026-10-28 |
 | [0012](architecture/0012-authenticatie-better-auth.md) | better-auth voor identiteit, autorisatie en klantisolatie zelf | besloten 2026-10-28 |
-| [0013](architecture/0013-midocean-rest-koppeling.md) | midocean als eerste koppeling, via REST; bestellen voorbereid maar niet gebouwd | besloten 2026-10-28, op basis van hun handleiding v1.12.2 |
+| [0013](architecture/0013-midocean-rest-koppeling.md) | midocean als eerste koppeling, via REST; bestellen voorbereid maar niet gebouwd | besloten 2026-10-28, op basis van hun handleiding v1.12.2; paragraaf 4 gecorrigeerd door ADR-0014 |
+| [0014](architecture/0014-vergelijken-altijd-hash-alleen-voor-opslag.md) | De importvergelijking draait altijd; de hash bepaalt alleen of de ruwe payload opnieuw wordt vastgelegd | besloten 2026-10-28, tijdens het bouwen gebleken |
 
 ## 1b. Bevestigd op 2026-10-28
 

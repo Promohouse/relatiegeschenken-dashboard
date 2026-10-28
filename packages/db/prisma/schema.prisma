@@ -575,6 +575,19 @@ model Product {
   categoryId String?          @db.Uuid
   category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
+  /// Productkenmerken die leveranciers aanleveren en die een klant vraagt.
+  /// Allemaal optioneel: niet elke leverancier levert ze, en leeg is iets
+  /// anders dan onbekend.
+  material        String?
+  /// Afmetingen zoals de leverancier ze schrijft, bijvoorbeeld "21X14X1,6 CM".
+  dimensions      String?
+  /// Landcode van herkomst, twee letters.
+  countryOfOrigin String?
+  /// Goederencode voor douane en intrastat.
+  commodityCode   String?
+  /// Of er op bedrukt kan worden volgens de leverancier.
+  printable       Boolean?
+
   isActive Boolean @default(true)
 
   isDemo    Boolean  @default(false)
@@ -607,12 +620,18 @@ model ProductVariant {
   productId String  @db.Uuid
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  sku       String  @unique
-  colorName String?
-  colorHex  String?
-  size      String?
-  eanCode   String?
-  isActive  Boolean @default(true)
+  sku        String  @unique
+  colorName  String?
+  colorHex   String?
+  /// Kleurcode van de leverancier, bijvoorbeeld "03". Nodig bij bestellen.
+  colorCode  String?
+  /// Grove kleurgroep om op te filteren: black, blue, ...
+  colorGroup String?
+  /// Pantone-aanduiding, als de leverancier die geeft.
+  pmsColor   String?
+  size       String?
+  eanCode    String?
+  isActive   Boolean @default(true)
 
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
