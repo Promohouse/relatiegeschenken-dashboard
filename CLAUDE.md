@@ -139,6 +139,19 @@ npm run typecheck      # TypeScript over de hele monorepo
 - **Testgegevens** krijgen een uniek nummer via `test/helpers.ts`; vitest
   draait testbestanden parallel, dus een tijdstempel is niet uniek genoeg.
 
+## Offertes zijn onveranderlijk
+
+Een offerteversie met `lockedAt` is door databasetriggers beschermd: wijzigen,
+verwijderen en regels toevoegen worden geweigerd, en offertebeslissingen zijn
+append-only. Voor beheerhandelingen is er `allowLockedQuoteChanges(tx)` uit
+`@rgh/db`, dat binnen de transactie `SET LOCAL rgh.unlock_quotes = 'on'` zet.
+Gebruik dat alleen voor opruimen en gecontroleerde correcties, nooit in gewone
+domeinlogica. Zie ADR-0007 en docs/DATABASE.md paragraaf 3.
+
+Let op bij triggers die een melding moeten teruggeven: gebruik geen expliciete
+`ERRCODE` die Prisma kent (zoals `restrict_violation`), want dan vervangt
+Prisma de melding door een eigen tekst. Zonder ERRCODE komt de melding door.
+
 ## Twee soorten akkoord
 
 Niet verwarren:

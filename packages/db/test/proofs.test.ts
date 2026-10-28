@@ -37,7 +37,6 @@ describe('drukproeven', () => {
     const order = await db.order.create({
       data: {
         number: `ORD-${tag}`,
-        kind: 'ORDER',
         customerId,
         lines: { create: [{ lineNumber: 1, productName: 'Thermosbeker', quantity: 250, unitSalePrice: '9.9500' }] },
       },

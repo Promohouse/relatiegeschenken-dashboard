@@ -6,6 +6,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Offertes als eigen aggregaat (ADR-0007): quotes, quote_versions,
+  quote_items, quote_item_print_jobs en quote_approvals, met vier
+  databasetriggers die onveranderlijkheid afdwingen en een expliciet
+  ontsnappingsluik voor beheer. Orders verwijzen via quoteVersionId naar de
+  geaccepteerde versie; orderregels houden hun herkomst vast. 94 tests.
+- BullMQ op Valkey als jobqueue (ADR-0009), Valkey lokaal draaiend.
+- NestJS bevestigd als backendframework (ADR-0008).
 - Fase 0 documentatie op basis van de masterprompt: MASTERPLAN.md,
   ARCHITECTURE.md, DATABASE.md, WORKFLOWS.md, SECURITY.md, DEPLOYMENT.md,
   DEVELOPMENT-ROADMAP.md en DECISIONS.md. CLAUDE.md uitgebreid met tien

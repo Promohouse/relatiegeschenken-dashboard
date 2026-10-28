@@ -10,7 +10,12 @@
  *
  * De seed is idempotent: nogmaals draaien levert hetzelfde resultaat.
  */
-import { createPrismaClient, issueNumber } from '../src/index'
+import {
+  createPrismaClient,
+  issueNumber,
+  lockQuoteVersion,
+  approvalIdempotencyKey,
+} from '../src/index'
 import { calculateOrderLine, sumOrderTotals } from '@rgh/contracts'
 
 const prisma = createPrismaClient()
@@ -283,9 +288,11 @@ async function seedDemo() {
   return { users }
 }
 
-// --- Demo-klanten en -orders ----------------------------------------------
+// --- Demo-offertes en -orders ---------------------------------------------
+// Volgt de echte route uit ADR-0007: offerte -> versie vastzetten ->
+// klantakkoord op die exacte versie -> order als kopie van de versie.
 
-async function seedDemoOrders(users: { id: string; email: string }[]) {
+async function seedDemoQuotesAndOrders(users: { id: string; email: string }[]) {
   const demo = { isDemo: true }
   const sales = users.find((u) => u.email === 'verkoop@demo.local')!
   const orderDesk = users.find((u) => u.email === 'orderbeheer@demo.local')!
@@ -304,59 +311,60 @@ async function seedDemoOrders(users: { id: string; email: string }[]) {
       continue
     }
     const number = await prisma.$transaction((tx) => issueNumber(tx, 'CUSTOMER', 0))
-    const customer = await prisma.customer.create({
-      data: {
-        number,
-        name: def.name,
-        vatNumber: def.vatNumber,
-        email: `inkoop@${def.name.toLowerCase().replace(/[^a-z]+/g, '')}.demo`,
-        phone: '038 123 4567',
-        notes: 'Demoklant. Interne opmerkingen zijn nooit zichtbaar in het klantportaal.',
-        ...demo,
-        contacts: {
-          create: [
-            { firstName: 'Demo', lastName: 'Inkoper', email: `inkoop@demo.local`, isPrimary: true, ...demo },
-            { firstName: 'Demo', lastName: 'Marketing', email: `marketing@demo.local`, ...demo },
-          ],
+    customers.push(
+      await prisma.customer.create({
+        data: {
+          number,
+          name: def.name,
+          vatNumber: def.vatNumber,
+          email: `inkoop@${def.name.toLowerCase().replace(/[^a-z]+/g, '')}.demo`,
+          phone: '038 123 4567',
+          notes: 'Demoklant. Interne opmerkingen zijn nooit zichtbaar in het klantportaal.',
+          ...demo,
+          contacts: {
+            create: [
+              { firstName: 'Demo', lastName: 'Inkoper', email: 'inkoop@demo.local', isPrimary: true, ...demo },
+              { firstName: 'Demo', lastName: 'Marketing', email: 'marketing@demo.local', ...demo },
+            ],
+          },
+          addresses: {
+            create: [
+              { type: 'INVOICE', label: 'Factuuradres', street: 'Voorbeeldstraat', houseNumber: '1', postalCode: '8000 AA', city: def.city, isDefault: true, ...demo },
+              { type: 'DELIVERY', label: 'Hoofdvestiging', street: 'Voorbeeldweg', houseNumber: '25', postalCode: '8000 BB', city: def.city, isDefault: true, ...demo },
+            ],
+          },
         },
-        addresses: {
-          create: [
-            { type: 'INVOICE', label: 'Factuuradres', street: 'Voorbeeldstraat', houseNumber: '1', postalCode: '8000 AA', city: def.city, isDefault: true, ...demo },
-            { type: 'DELIVERY', label: 'Hoofdvestiging', street: 'Voorbeeldweg', houseNumber: '25', postalCode: '8000 BB', city: def.city, isDefault: true, ...demo },
-          ],
-        },
-      },
-    })
-    customers.push(customer)
+      }),
+    )
   }
 
-  // Eén offerte en twee orders, met regels, tijdlijn, document en taak.
   const products = await prisma.product.findMany({
     where: { isDemo: true },
     include: { suppliers: { include: { supplier: true } }, printOptions: { include: { printMethod: true } } },
   })
 
-  const orderPlans = [
-    { kind: 'QUOTE' as const, status: 'QUOTE_SENT' as const, customer: 0, owner: sales.id, lines: [0, 1] },
-    { kind: 'ORDER' as const, status: 'ACTIVE' as const, customer: 1, owner: orderDesk.id, lines: [2] },
-    { kind: 'ORDER' as const, status: 'ACTIVE' as const, customer: 2, owner: orderDesk.id, lines: [0, 3] },
+  // Eén offerte blijft bij de klant liggen, twee worden geaccepteerd.
+  const plans = [
+    { customer: 0, owner: sales.id, accept: false, lines: [0, 1] },
+    { customer: 1, owner: orderDesk.id, accept: true, lines: [2] },
+    { customer: 2, owner: orderDesk.id, accept: true, lines: [0, 3] },
   ]
 
-  let created = 0
-  for (const plan of orderPlans) {
+  let quotesCreated = 0
+  let ordersCreated = 0
+
+  for (const plan of plans) {
     const customer = customers[plan.customer]
-    const existing = await prisma.order.findFirst({ where: { customerId: customer.id, kind: plan.kind, isDemo: true } })
+    const existing = await prisma.quote.findFirst({ where: { customerId: customer.id, isDemo: true } })
     if (existing) continue
 
     const contact = await prisma.contactPerson.findFirstOrThrow({ where: { customerId: customer.id, isPrimary: true } })
     const invoiceAddress = await prisma.address.findFirstOrThrow({ where: { customerId: customer.id, type: 'INVOICE' } })
     const deliveryAddress = await prisma.address.findFirstOrThrow({ where: { customerId: customer.id, type: 'DELIVERY' } })
 
-    const number = await prisma.$transaction((tx) =>
-      issueNumber(tx, plan.kind === 'QUOTE' ? 'QUOTE' : 'ORDER', YEAR),
-    )
+    const quoteNumber = await prisma.$transaction((tx) => issueNumber(tx, 'QUOTE', YEAR))
 
-    const lineInputs = plan.lines.map((idx, i) => {
+    const itemInputs = plan.lines.map((idx, i) => {
       const product = products[idx]
       const ps = product.suppliers[0]
       const option = product.printOptions[0]
@@ -370,88 +378,231 @@ async function seedDemoOrders(users: { id: string; email: string }[]) {
         vatRate: 21,
         printJobs,
       })
-      return { product, ps, option, quantity, unitSalePrice, printJobs, totals }
+      return { product, ps, option, quantity, unitSalePrice, totals }
     })
 
-    const orderTotals = sumOrderTotals(lineInputs.map((l) => l.totals))
+    const quoteTotals = sumOrderTotals(itemInputs.map((l) => l.totals))
 
-    const order = await prisma.order.create({
+    const quote = await prisma.quote.create({
       data: {
-        number,
-        kind: plan.kind,
-        status: plan.status,
+        number: quoteNumber,
         customerId: customer.id,
         contactPersonId: contact.id,
         ownerId: plan.owner,
         invoiceAddressId: invoiceAddress.id,
         deliveryAddressId: deliveryAddress.id,
+        status: 'DRAFT',
         requestedDeliveryDate: new Date(Date.now() + 21 * 86400000),
         reference: 'Demo-referentie',
         notes: 'Demodata voor ontwikkeling.',
-        subtotalExclVat: orderTotals.subtotalExclVat.toFixed(2),
-        vatAmount: orderTotals.vatAmount.toFixed(2),
-        totalInclVat: orderTotals.totalInclVat.toFixed(2),
-        purchaseTotal: orderTotals.purchaseTotal.toFixed(2),
-        marginAmount: orderTotals.marginAmount.toFixed(2),
+        ...demo,
+        versions: {
+          create: [{
+            versionNumber: 1,
+            validUntil: new Date(Date.now() + 30 * 86400000),
+            deliveryTerms: 'Levering franco huis bij orders boven 500 euro.',
+            customerNotes: 'Prijzen exclusief btw. Levertijd na goedkeuring drukproef.',
+            createdById: plan.owner,
+            subtotalExclVat: quoteTotals.subtotalExclVat.toFixed(2),
+            vatAmount: quoteTotals.vatAmount.toFixed(2),
+            totalInclVat: quoteTotals.totalInclVat.toFixed(2),
+            purchaseTotal: quoteTotals.purchaseTotal.toFixed(2),
+            marginAmount: quoteTotals.marginAmount.toFixed(2),
+            ...demo,
+            items: {
+              create: itemInputs.map((l, i) => ({
+                lineNumber: i + 1,
+                productId: l.product.id,
+                productSupplierId: l.ps.id,
+                supplierId: l.ps.supplierId,
+                productArticleNumber: l.product.articleNumber,
+                productName: l.product.name,
+                supplierName: l.ps.supplier.name,
+                quantity: l.quantity,
+                unitSalePrice: l.unitSalePrice.toFixed(4),
+                unitPurchasePrice: Number(l.ps.purchasePrice).toFixed(4),
+                vatRate: '21',
+                lineSubtotalExclVat: l.totals.subtotalExclVat.toFixed(2),
+                lineVatAmount: l.totals.vatAmount.toFixed(2),
+                lineTotalInclVat: l.totals.totalInclVat.toFixed(2),
+                linePurchaseTotal: l.totals.purchaseTotal.toFixed(2),
+                lineMarginAmount: l.totals.marginAmount.toFixed(2),
+                ...demo,
+                printJobs: l.option
+                  ? {
+                      create: [{
+                        printMethodId: l.option.printMethodId,
+                        printMethodName: l.option.printMethod.name,
+                        position: 'voorzijde',
+                        colors: 1,
+                        unitPrice: '0.3200',
+                        setupCost: Number(l.option.setupCost).toFixed(4),
+                        ...demo,
+                      }],
+                    }
+                  : undefined,
+              })),
+            },
+          }],
+        },
+      },
+      include: { versions: true },
+    })
+
+    const version = quote.versions[0]
+
+    // Versie vastzetten: vanaf nu weigeren de triggers elke wijziging.
+    await prisma.$transaction((tx) =>
+      lockQuoteVersion(tx, version.id, { documentChecksum: 'demo-checksum-offerte' }),
+    )
+    await prisma.quote.update({
+      where: { id: quote.id },
+      data: { currentVersionId: version.id, status: 'AWAITING_CUSTOMER' },
+    })
+    quotesCreated++
+
+    await prisma.document.create({
+      data: {
+        category: 'QUOTE',
+        title: `Offerte ${quoteNumber}`,
+        visibility: 'CUSTOMER',
+        customerId: customer.id,
+        quoteId: quote.id,
+        quoteVersionId: version.id,
+        createdById: plan.owner,
+        ...demo,
+        versions: {
+          create: [{
+            versionNumber: 1,
+            storageKey: `demo/quotes/${version.id}/v1.pdf`,
+            fileName: `${quoteNumber}.pdf`,
+            mimeType: 'application/pdf',
+            sizeBytes: 1024,
+            checksum: 'demo-checksum-offerte',
+            uploadedById: plan.owner,
+            note: 'Demodocument zonder echt bestand.',
+          }],
+        },
+      },
+    })
+
+    if (!plan.accept) {
+      await prisma.task.create({
+        data: {
+          title: `Offerte ${quoteNumber} nabellen`,
+          quoteId: quote.id,
+          customerId: customer.id,
+          assigneeId: plan.owner,
+          createdById: plan.owner,
+          dueDate: new Date(Date.now() + 3 * 86400000),
+          ...demo,
+        },
+      })
+      continue
+    }
+
+    // Klantakkoord op deze exacte versie. De idempotency-sleutel maakt een
+    // tweede akkoord op dezelfde versie onmogelijk.
+    await prisma.quoteApproval.create({
+      data: {
+        quoteVersionId: version.id,
+        decision: 'ACCEPTED',
+        decidedByContactId: contact.id,
+        comment: 'Akkoord via het klantportaal.',
+        documentChecksum: 'demo-checksum-offerte',
+        idempotencyKey: approvalIdempotencyKey(version.id, 'ACCEPTED'),
+        ...demo,
+      },
+    })
+    await prisma.quote.update({
+      where: { id: quote.id },
+      data: { status: 'ACCEPTED', acceptedVersionId: version.id },
+    })
+
+    // Order als kopie van de geaccepteerde versie.
+    const orderNumber = await prisma.$transaction((tx) => issueNumber(tx, 'ORDER', YEAR))
+    const items = await prisma.quoteItem.findMany({
+      where: { quoteVersionId: version.id },
+      include: { printJobs: true },
+      orderBy: { lineNumber: 'asc' },
+    })
+
+    const order = await prisma.order.create({
+      data: {
+        number: orderNumber,
+        quoteVersionId: version.id,
+        customerId: customer.id,
+        contactPersonId: contact.id,
+        ownerId: plan.owner,
+        invoiceAddressId: invoiceAddress.id,
+        deliveryAddressId: deliveryAddress.id,
+        status: 'ACTIVE',
+        requestedDeliveryDate: quote.requestedDeliveryDate,
+        reference: quote.reference,
+        notes: `Ontstaan uit geaccepteerde offerte ${quoteNumber}, versie ${version.versionNumber}.`,
+        subtotalExclVat: version.subtotalExclVat,
+        vatAmount: version.vatAmount,
+        totalInclVat: version.totalInclVat,
+        purchaseTotal: version.purchaseTotal,
+        marginAmount: version.marginAmount,
         ...demo,
         lines: {
-          create: lineInputs.map((l, i) => ({
-            lineNumber: i + 1,
-            productId: l.product.id,
-            productSupplierId: l.ps.id,
-            supplierId: l.ps.supplierId,
-            productArticleNumber: l.product.articleNumber,
-            productName: l.product.name,
-            supplierName: l.ps.supplier.name,
-            quantity: l.quantity,
-            unitSalePrice: l.unitSalePrice.toFixed(4),
-            unitPurchasePrice: Number(l.ps.purchasePrice).toFixed(4),
-            setupCost: '0',
-            vatRate: '21',
-            lineSubtotalExclVat: l.totals.subtotalExclVat.toFixed(2),
-            lineVatAmount: l.totals.vatAmount.toFixed(2),
-            lineTotalInclVat: l.totals.totalInclVat.toFixed(2),
-            linePurchaseTotal: l.totals.purchaseTotal.toFixed(2),
-            lineMarginAmount: l.totals.marginAmount.toFixed(2),
-            proofStatus: plan.kind === 'ORDER' ? 'REQUESTED' : 'NOT_REQUIRED',
+          create: items.map((it) => ({
+            lineNumber: it.lineNumber,
+            quoteItemId: it.id,
+            productId: it.productId,
+            productVariantId: it.productVariantId,
+            productSupplierId: it.productSupplierId,
+            supplierId: it.supplierId,
+            productArticleNumber: it.productArticleNumber,
+            productName: it.productName,
+            variantDescription: it.variantDescription,
+            supplierName: it.supplierName,
+            description: it.description,
+            quantity: it.quantity,
+            unitSalePrice: it.unitSalePrice,
+            unitPurchasePrice: it.unitPurchasePrice,
+            discountPercent: it.discountPercent,
+            setupCost: it.setupCost,
+            vatRate: it.vatRate,
+            lineSubtotalExclVat: it.lineSubtotalExclVat,
+            lineVatAmount: it.lineVatAmount,
+            lineTotalInclVat: it.lineTotalInclVat,
+            linePurchaseTotal: it.linePurchaseTotal,
+            lineMarginAmount: it.lineMarginAmount,
+            proofStatus: 'REQUESTED',
             purchaseStatus: 'NOT_ORDERED',
             logisticsStatus: 'NONE',
             ...demo,
-            printJobs: l.option
-              ? {
-                  create: [{
-                    printMethodId: l.option.printMethodId,
-                    printMethodName: l.option.printMethod.name,
-                    position: 'voorzijde',
-                    colors: 1,
-                    unitPrice: '0.3200',
-                    setupCost: Number(l.option.setupCost).toFixed(4),
-                    ...demo,
-                  }],
-                }
-              : undefined,
+            printJobs: {
+              create: it.printJobs.map((pj) => ({
+                printMethodId: pj.printMethodId,
+                printMethodName: pj.printMethodName,
+                position: pj.position,
+                colors: pj.colors,
+                unitPrice: pj.unitPrice,
+                setupCost: pj.setupCost,
+                ...demo,
+              })),
+            },
           })),
         },
         events: {
           create: [
             { type: 'REQUEST_RECEIVED', userId: plan.owner, note: 'Aanvraag per e-mail ontvangen.' },
-            { type: 'QUOTE_CREATED', userId: plan.owner, statusDimension: 'MAIN', toValue: 'QUOTE_SENT' },
-            ...(plan.kind === 'ORDER'
-              ? [
-                  { type: 'QUOTE_ACCEPTED' as const, userId: plan.owner },
-                  { type: 'ORDER_CREATED' as const, userId: plan.owner, statusDimension: 'MAIN' as const, toValue: 'ACTIVE' },
-                  { type: 'PROOF_REQUESTED' as const, userId: plan.owner, statusDimension: 'PROOF' as const, toValue: 'REQUESTED' },
-                ]
-              : []),
+            { type: 'QUOTE_CREATED', userId: plan.owner },
+            { type: 'QUOTE_SENT', userId: plan.owner },
+            { type: 'QUOTE_ACCEPTED', note: `Akkoord op versie ${version.versionNumber}.` },
+            { type: 'ORDER_CREATED', statusDimension: 'MAIN', toValue: 'ACTIVE' },
+            { type: 'PROOF_REQUESTED', userId: plan.owner, statusDimension: 'PROOF', toValue: 'REQUESTED' },
           ],
         },
         tasks: {
           create: [{
-            title: plan.kind === 'QUOTE' ? 'Offerte nabellen' : 'Drukproef bij leverancier opvragen',
+            title: 'Drukproef bij leverancier opvragen',
             assigneeId: plan.owner,
             createdById: plan.owner,
             dueDate: new Date(Date.now() + 3 * 86400000),
-            priority: 'NORMAL',
             ...demo,
           }],
         },
@@ -460,8 +611,8 @@ async function seedDemoOrders(users: { id: string; email: string }[]) {
 
     await prisma.document.create({
       data: {
-        category: plan.kind === 'QUOTE' ? 'QUOTE' : 'ORDER_CONFIRMATION',
-        title: `${plan.kind === 'QUOTE' ? 'Offerte' : 'Orderbevestiging'} ${number}`,
+        category: 'ORDER_CONFIRMATION',
+        title: `Orderbevestiging ${orderNumber}`,
         visibility: 'CUSTOMER',
         customerId: customer.id,
         orderId: order.id,
@@ -470,21 +621,21 @@ async function seedDemoOrders(users: { id: string; email: string }[]) {
         versions: {
           create: [{
             versionNumber: 1,
-            storageKey: `demo/${order.id}/v1.pdf`,
-            fileName: `${number}.pdf`,
+            storageKey: `demo/orders/${order.id}/v1.pdf`,
+            fileName: `${orderNumber}.pdf`,
             mimeType: 'application/pdf',
             sizeBytes: 1024,
-            checksum: 'demo-checksum',
+            checksum: 'demo-checksum-order',
             uploadedById: plan.owner,
             note: 'Demodocument zonder echt bestand.',
           }],
         },
       },
     })
-    created++
+    ordersCreated++
   }
 
-  console.log(`  demo: ${customers.length} klanten, ${created} nieuwe orders met regels, tijdlijn, document en taak`)
+  console.log(`  demo: ${customers.length} klanten, ${quotesCreated} offertes vastgezet, ${ordersCreated} orders uit geaccepteerde offerteversies`)
 }
 
 // --- Demo: koppelconfiguratie en kanalen ----------------------------------
@@ -648,12 +799,14 @@ async function main() {
   await seedPermissions()
   await seedBaseData()
   const { users } = await seedDemo()
-  await seedDemoOrders(users)
+  await seedDemoQuotesAndOrders(users)
   await seedConnections()
   await seedChannels()
 
   const counts = {
     klanten: await prisma.customer.count(),
+    offertes: await prisma.quote.count(),
+    offerteversies: await prisma.quoteVersion.count(),
     orders: await prisma.order.count(),
     orderregels: await prisma.orderLine.count(),
     gebeurtenissen: await prisma.orderEvent.count(),

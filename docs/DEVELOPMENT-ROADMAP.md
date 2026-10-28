@@ -18,14 +18,14 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | Eigen databaserol, databases, veiligheidsslot | guard weigert een vreemde database |
 | ✅ | Kernschema, migraties, seed, 76 tests | `npm test` groen |
 | ✅ | Projectdocumenten | dit document en de zeven andere |
-| ◻ | **Offertemodel splitsen** (D-01) | `quotes`/`quote_versions`/`quote_items`/`quote_approvals`; een geaccepteerde versie is niet meer te wijzigen, aangetoond met een test |
+| ✅ | **Offertemodel splitsen** (D-01) | gereed: vijf tabellen, vier triggers, 18 tests die aantonen dat een vastgezette versie niet te wijzigen is en dat één akkoord nooit twee orders oplevert |
 | ◻ | `external_references` toevoegen | elke externe koppeling kan herkomst vastleggen; test op idempotente upsert |
 | ◻ | API-fundament NestJS | configuratie, foutafhandeling, auditlog-interceptor, OpenAPI op `/docs`, healthcheck |
 | ◻ | Nummerreeksen en prijsengine achter services | nummeruitgifte onder lock via de service; prijsengine lost `price_rules` op naar een verkoopprijs, met tests |
 | ◻ | Authenticatie en MFA (D-04) | inloggen, sessie, MFA, wachtwoordherstel; tests die **weigering** aantonen |
 | ◻ | Rechten-guard | elk endpoint heeft een permissie; een test per module die 403 verwacht |
 | ◻ | Klantscope-extensie | portaalquery zonder `customerId`-filter weigert; test met vreemd id verwacht 404 |
-| ◻ | Jobqueue (D-03) | een taak met retry en dead-letter, zichtbaar en herstartbaar |
+| ◻ | Jobqueue: BullMQ op Valkey (ADR-0009) | een taak met retry en dead-letter, zichtbaar en herstartbaar; Valkey draait lokaal |
 | ◻ | Storage-adapter | upload, download, controlewaarde, versie; lokale schijf werkend |
 | ⏸ | Docker Compose lokaal | wacht op Docker op de machine |
 | ⏸ | Kubernetes, Helm, CI/CD, monitoring | wacht op de hostingantwoorden in DEPLOYMENT.md §2 |

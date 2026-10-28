@@ -1,7 +1,7 @@
 # DATABASE — Relatiegeschenken Hub
 
 PostgreSQL 16, Prisma 7.10.0. UUID-sleutels, leesbare nummers voor klanten,
-offertes, orders en inkooporders. Stand: 58 tabellen, twee migraties.
+offertes, orders en inkooporders. Stand: 63 tabellen, vijf migraties.
 
 ## 1. Invarianten
 
@@ -29,7 +29,9 @@ Regels die de database zelf of een service afdwingt, niet de interface.
    portaalsessie wordt op `customerId` begrensd, afgedwongen door een
    Prisma-extensie, niet door discipline.
 8. **Append-only waar bewijs nodig is.** Tijdlijn, auditlog, goedkeuringen,
-   statushistorie en synchronisatie-events worden nooit gewijzigd.
+   statushistorie en synchronisatie-events worden nooit gewijzigd. Voor
+   offerteversies en offertebeslissingen dwingen databasetriggers dit af,
+   niet de applicatie (§3).
 9. **Definitieve verkoopfactuurnummers komen uit SnelStart.** Onze
    nummerreeksen geven offerte-, order-, inkooporder- en klantnummers uit, en
    voor facturen uitsluitend een interne conceptreferentie.
@@ -81,16 +83,19 @@ wordt in deze fase **niet gebruikt**: leveranciersbestellingen gaan buiten het
 platform.
 
 ### Offertes
-**Te bouwen, en dit is de belangrijkste wijziging. Zie §3.**
 `quotes`, `quote_versions`, `quote_items`, `quote_item_print_jobs`,
-`quote_approvals`.
+`quote_approvals` - **gereed**, met databasetriggers die de onveranderlijkheid
+afdwingen. Zie §3 en ADR-0007.
 
 ### Orders
-`orders`, `order_lines`, `order_line_print_jobs`, `order_events` — gereed,
-maar `orders` moet opgeschoond worden als de offertes eruit gaan (§3).
+`orders`, `order_lines`, `order_line_print_jobs`, `order_events` — gereed.
+`kind` is verdwenen; een order verwijst via `quoteVersionId` naar de
+geaccepteerde offerteversie waaruit hij is ontstaan, één op één. `order_lines`
+houdt via `quoteItemId` de herkomst per regel vast. Beide hebben een
+`version`-kolom voor optimistic locking.
 
 Te bouwen: `order_revisions` (wijzigingen na acceptatie, met het effect op
-bestaande goedkeuringen), een versiekolom voor optimistic locking.
+bestaande goedkeuringen).
 
 ### Workflow
 **Volledig te bouwen.** `workflow_definitions`, `workflow_states`,
@@ -168,44 +173,55 @@ zijn vóór de eerste externe koppeling.
 `shop_channels`, `channel_assortment_items`, `price_rules`, `feed_exports`,
 `partner_accounts`, `api_keys` — gereed.
 
-## 3. Het offertebesluit: splitsen
+## 3. Offertes: gesplitst en onveranderlijk
 
-**Nu:** offerte en order zijn één aggregaat, `orders` met
-`kind = QUOTE | ORDER`. Dat is gekozen om de orderdetailpagina niet twee keer
-te hoeven bouwen.
-
-**Het probleem:** de opdracht vraagt offerteversies, en bij acceptatie "de
-exacte offerteversie bewaren". In het samengevoegde model zouden we dezelfde
-rijen versioneren die de order daarna muteert. Dan is het akkoord niet meer
-aantoonbaar aan één onveranderlijke versie — en juist dat is bij een digitaal
-akkoord het hele punt. Daarbovenop vraagt de opdracht twee gescheiden
-statusreeksen: een offerte kan "verlopen" of "wijziging gevraagd" zijn, een
-order niet.
-
-**Advies: splitsen.**
+Besloten en uitgevoerd op 2026-10-28, zie
+[ADR-0007](architecture/0007-offertemodel-splitsen.md).
 
 ```
-quotes            kop: klant, contactpersoon, eigenaar, huidige versie
-  quote_versions  ONVERANDERLIJK na verzenden: versienummer, totalen,
-                  geldigheidsdatum, PDF-verwijzing
-    quote_items   regels van die versie, met prijsmomentopname
-  quote_approvals akkoord of afwijzing, met versie, gebruiker, tijdstip,
-                  bestandscontrolewaarde — append-only
+quotes            kop: klant, contactpersoon, eigenaar, huidige versie,
+                  geaccepteerde versie
+  quote_versions  ONVERANDERLIJK zodra lockedAt gevuld is
+    quote_items   regels met prijsmomentopname
+      quote_item_print_jobs
+  quote_approvals append-only beslissing per versie
 
-orders            ontstaat bij acceptatie, verwijst naar quote_version
-  order_lines     overgenomen uit de geaccepteerde versie
+orders            ontstaat uit een geaccepteerde versie (quoteVersionId, uniek)
+  order_lines     kopie van de offerteregels (quoteItemId als herkomst)
 ```
 
-**Kosten:** `orders.kind` en de offertestatussen verdwijnen, en de
-offertedemodata moet opnieuw. Er is nog geen echte data, dus dit is een
-migratie van niets. **Over een halfjaar is dit een pijnlijke verbouwing met
-orders eraan.** Daarom nu.
+### Onveranderlijkheid staat in de database, niet in de code
 
-**Wat we niet opgeven:** de orderdetailpagina blijft één scherm. De offerte
-krijgt een eigen, eenvoudiger scherm — dat is hij ook: een document met
-versies en een akkoord, geen procesdossier.
+Vier triggers dwingen dit af. Een digitaal klantakkoord moet aantoonbaar aan
+een exacte versie vastliggen; dan is "de service doet het netjes" niet genoeg.
 
-Dit besluit vraagt bevestiging, zie DECISIONS.md D-01.
+| Trigger | Weigert |
+|---|---|
+| `quote_versions_immutable` | elke wijziging of verwijdering zodra `lockedAt` gevuld is. De overgang naar vastgezet mag wel: dan is de oude waarde nog leeg. |
+| `quote_items_immutable` | wijzigen, verwijderen **en toevoegen** van regels op een vastgezette versie |
+| `quote_item_print_jobs_immutable` | hetzelfde voor bedrukkingen, via de regel naar de versie |
+| `quote_approvals_append_only` | elke wijziging of verwijdering van een klantbeslissing |
+
+### Ontsnappingsluik voor beheer
+
+Demodata opruimen, testopruiming en gecontroleerde correcties zetten binnen
+hun transactie:
+
+```sql
+SET LOCAL rgh.unlock_quotes = 'on';
+```
+
+In code: `allowLockedQuoteChanges(tx)` uit `@rgh/db`. Bewust omslachtig en
+zichtbaar, zodat het niet per ongeluk gebeurt. Een order die aan een
+offerteversie hangt blokkeert verwijdering ook met het luik open, want
+`Order.quoteVersionId` is `Restrict`.
+
+### Eén akkoord, nooit twee orders
+
+`quote_approvals.idempotencyKey` is `"<quoteVersionId>:<decision>"` en uniek.
+Tweemaal klikken op akkoord levert één beslissing. `orders.quoteVersionId` is
+uniek, dus uit één geaccepteerde versie komt nooit meer dan één order. Beide
+zijn getest.
 
 ## 4. Conventies
 

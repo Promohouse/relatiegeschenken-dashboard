@@ -27,18 +27,29 @@ enum AddressType {
   DELIVERY
 }
 
-enum OrderKind {
-  QUOTE
-  ORDER
+/// Offertestatus. Een offerte heeft een eigen statusreeks: een order kan niet
+/// "verlopen" of "wijziging gevraagd" zijn. Zie ADR-0007.
+enum QuoteStatus {
+  DRAFT
+  READY_TO_SEND
+  SENT
+  AWAITING_CUSTOMER
+  CHANGES_REQUESTED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum QuoteDecision {
+  ACCEPTED
+  REJECTED
+  CHANGES_REQUESTED
 }
 
 /// Hoofdstatus van de order. Drukproef-, inkoop- en logistieke status staan
 /// per orderregel, omdat een order meerdere leveranciers en drukproeven heeft.
 enum OrderStatus {
   DRAFT
-  QUOTE_SENT
-  QUOTE_ACCEPTED
-  QUOTE_REJECTED
   ACTIVE
   COMPLETED
   CANCELLED
@@ -212,6 +223,10 @@ model User {
   invoicesContentApproved PurchaseInvoice[] @relation("InvoiceContentApprover")
   invoicesFinanceApproved PurchaseInvoice[] @relation("InvoiceFinanceApprover")
 
+  ownedQuotes          Quote[]         @relation("QuoteOwner")
+  createdQuoteVersions QuoteVersion[]
+  quoteApprovals       QuoteApproval[]
+
   @@index([customerId])
   @@map("users")
 }
@@ -295,6 +310,8 @@ model Customer {
   channels    ShopChannel[]
   priceRules  PriceRule[]
 
+  quotes Quote[]
+
   @@index([name])
   @@map("customers")
 }
@@ -318,6 +335,9 @@ model ContactPerson {
 
   orders         Order[]
   proofApprovals ProofApproval[]
+
+  quotes         Quote[]
+  quoteApprovals QuoteApproval[]
 
   @@index([customerId])
   @@map("contact_persons")
@@ -345,6 +365,9 @@ model Address {
 
   invoiceOrders  Order[] @relation("OrderInvoiceAddress")
   deliveryOrders Order[] @relation("OrderDeliveryAddress")
+
+  invoiceQuotes  Quote[] @relation("QuoteInvoiceAddress")
+  deliveryQuotes Quote[] @relation("QuoteDeliveryAddress")
 
   @@index([customerId, type])
   @@map("addresses")
@@ -394,6 +417,8 @@ model Supplier {
   purchaseOrders   PurchaseOrder[]
   purchaseInvoices PurchaseInvoice[]
   priceRules       PriceRule[]
+
+  quoteItems QuoteItem[]
 
   @@map("suppliers")
 }
@@ -472,6 +497,8 @@ model Product {
   channelItems ChannelAssortmentItem[]
   priceRules   PriceRule[]
 
+  quoteItems QuoteItem[]
+
   @@index([name])
   @@index([categoryId])
   @@map("products")
@@ -496,6 +523,8 @@ model ProductVariant {
   updatedAt DateTime @updatedAt
 
   orderLines OrderLine[]
+
+  quoteItems QuoteItem[]
 
   @@index([productId])
   @@map("product_variants")
@@ -525,6 +554,8 @@ model ProductSupplier {
   purchaseTiers      PurchasePriceTier[]
   orderLines         OrderLine[]
   purchaseOrderLines PurchaseOrderLine[]
+
+  quoteItems QuoteItem[]
 
   @@unique([supplierId, supplierArticleNumber])
   @@index([productId])
@@ -577,6 +608,8 @@ model PrintMethod {
 
   productOptions ProductPrintOption[]
   printJobs      OrderLinePrintJob[]
+
+  quoteItemPrintJobs QuoteItemPrintJob[]
 
   @@map("print_methods")
 }
@@ -681,14 +714,233 @@ model ProductFieldSource {
   @@map("product_field_sources")
 }
 
-// --- Offertes en orders ----------------------------------------------------
-// Offerte en order zijn één aggregaat met een `kind`, niet twee tabellen.
-// De orderdetailpagina is het belangrijkste scherm; die bouw je niet twee keer.
+// --- Offertes --------------------------------------------------------------
+// Eigen aggregaat met onveranderlijke versies (ADR-0007). Een verzonden
+// versie is niet meer te wijzigen; databasetriggers dwingen dat af, niet de
+// interface. Zo ligt een digitaal klantakkoord vast aan een exacte versie.
+
+model Quote {
+  id     String @id @default(uuid()) @db.Uuid
+  number String @unique
+
+  customerId      String         @db.Uuid
+  customer        Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contactPersonId String?        @db.Uuid
+  contactPerson   ContactPerson? @relation(fields: [contactPersonId], references: [id], onDelete: SetNull)
+
+  ownerId String? @db.Uuid
+  owner   User?   @relation("QuoteOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  invoiceAddressId  String?  @db.Uuid
+  invoiceAddress    Address? @relation("QuoteInvoiceAddress", fields: [invoiceAddressId], references: [id], onDelete: SetNull)
+  deliveryAddressId String?  @db.Uuid
+  deliveryAddress   Address? @relation("QuoteDeliveryAddress", fields: [deliveryAddressId], references: [id], onDelete: SetNull)
+
+  status QuoteStatus @default(DRAFT)
+
+  /// De versie die nu geldt. Verwijst naar de laatste versie, ook als die nog
+  /// een concept is.
+  currentVersionId String?       @unique @db.Uuid
+  currentVersion   QuoteVersion? @relation("QuoteCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  /// De versie waarop de klant akkoord heeft gegeven. Eenmaal gevuld verandert
+  /// deze nooit meer; daar hangt de order aan.
+  acceptedVersionId String?       @unique @db.Uuid
+  acceptedVersion   QuoteVersion? @relation("QuoteAcceptedVersion", fields: [acceptedVersionId], references: [id], onDelete: SetNull)
+
+  requestedDeliveryDate DateTime?
+  reference             String?
+  /// Interne opmerkingen, nooit zichtbaar in het klantportaal.
+  notes                 String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions  QuoteVersion[] @relation("QuoteVersions")
+  documents Document[]
+  tasks     Task[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([ownerId])
+  @@map("quotes")
+}
+
+/// Eén versie van een offerte. Zodra `lockedAt` gevuld is, is deze rij en al
+/// zijn regels onveranderlijk. Een wijziging maakt een nieuwe versie.
+model QuoteVersion {
+  id      String @id @default(uuid()) @db.Uuid
+  quoteId String @db.Uuid
+  quote   Quote  @relation("QuoteVersions", fields: [quoteId], references: [id], onDelete: Cascade)
+
+  versionNumber Int
+
+  validUntil DateTime?
+  vatRegime  VatRegime @default(DOMESTIC)
+  currency   String    @default("EUR")
+
+  /// Totalen zijn de som van de afgeronde regelbedragen (ADR-0005).
+  subtotalExclVat Decimal @default(0) @db.Decimal(14, 2)
+  vatAmount       Decimal @default(0) @db.Decimal(14, 2)
+  totalInclVat    Decimal @default(0) @db.Decimal(14, 2)
+  purchaseTotal   Decimal @default(0) @db.Decimal(14, 2)
+  marginAmount    Decimal @default(0) @db.Decimal(14, 2)
+
+  deliveryTerms String?
+  /// Tekst die de klant op de offerte ziet.
+  customerNotes String?
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  sentAt           DateTime?
+  /// Gezet bij verzenden. Vanaf dat moment weigeren de triggers elke wijziging.
+  lockedAt         DateTime?
+  /// Controlewaarde van de PDF op het moment van vastzetten. Onderdeel van het
+  /// bewijs bij een klantakkoord.
+  documentChecksum String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     QuoteItem[]
+  approvals QuoteApproval[]
+  documents Document[]
+
+  /// Uit één geaccepteerde versie komt nooit meer dan één order.
+  order Order?
+
+  currentOfQuote  Quote? @relation("QuoteCurrentVersion")
+  acceptedOfQuote Quote? @relation("QuoteAcceptedVersion")
+
+  @@unique([quoteId, versionNumber])
+  @@index([quoteId])
+  @@index([lockedAt])
+  @@map("quote_versions")
+}
+
+/// Offerteregel met prijsmomentopname. Dezelfde opbouw als een orderregel,
+/// zodat conversie een kopie is en geen herberekening.
+model QuoteItem {
+  id             String       @id @default(uuid()) @db.Uuid
+  quoteVersionId String       @db.Uuid
+  quoteVersion   QuoteVersion @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+  lineNumber     Int
+
+  productId         String?          @db.Uuid
+  product           Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productVariantId  String?          @db.Uuid
+  productVariant    ProductVariant?  @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  productSupplierId String?          @db.Uuid
+  productSupplier   ProductSupplier? @relation(fields: [productSupplierId], references: [id], onDelete: SetNull)
+  supplierId        String?          @db.Uuid
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  // --- Momentopname bij aanmaak ---
+  productArticleNumber String?
+  productName          String
+  variantDescription   String?
+  supplierName         String?
+  description          String?
+
+  quantity          Int
+  unitSalePrice     Decimal @db.Decimal(14, 4)
+  unitPurchasePrice Decimal @default(0) @db.Decimal(14, 4)
+  discountPercent   Decimal @default(0) @db.Decimal(5, 2)
+  setupCost         Decimal @default(0) @db.Decimal(14, 4)
+  vatRate           Decimal @default(21) @db.Decimal(5, 2)
+
+  lineSubtotalExclVat Decimal @default(0) @db.Decimal(14, 2)
+  lineVatAmount       Decimal @default(0) @db.Decimal(14, 2)
+  lineTotalInclVat    Decimal @default(0) @db.Decimal(14, 2)
+  linePurchaseTotal   Decimal @default(0) @db.Decimal(14, 2)
+  lineMarginAmount    Decimal @default(0) @db.Decimal(14, 2)
+
+  notes String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  printJobs  QuoteItemPrintJob[]
+  orderLines OrderLine[]
+
+  @@unique([quoteVersionId, lineNumber])
+  @@index([quoteVersionId])
+  @@index([productId])
+  @@map("quote_items")
+}
+
+model QuoteItemPrintJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  quoteItemId String    @db.Uuid
+  quoteItem   QuoteItem @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+
+  printMethodId String?      @db.Uuid
+  printMethod   PrintMethod? @relation(fields: [printMethodId], references: [id], onDelete: SetNull)
+
+  printMethodName String
+  position        String?
+  colors          Int     @default(1)
+  unitPrice       Decimal @default(0) @db.Decimal(14, 4)
+  setupCost       Decimal @default(0) @db.Decimal(14, 4)
+  notes           String?
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([quoteItemId])
+  @@map("quote_item_print_jobs")
+}
+
+/// Beslissing van de klant op één offerteversie. Append-only: een trigger
+/// weigert elke wijziging en verwijdering.
+model QuoteApproval {
+  id             String       @id @default(uuid()) @db.Uuid
+  quoteVersionId String       @db.Uuid
+  quoteVersion   QuoteVersion @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+
+  decision QuoteDecision
+
+  decidedByUserId    String?        @db.Uuid
+  decidedByUser      User?          @relation(fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  decidedByContactId String?        @db.Uuid
+  decidedByContact   ContactPerson? @relation(fields: [decidedByContactId], references: [id], onDelete: SetNull)
+
+  decidedAt DateTime @default(now())
+  comment   String?
+
+  /// Bewijsmateriaal bij het akkoord.
+  ipAddress        String?
+  userAgent        String?
+  documentChecksum String?
+
+  /// Sleutel "<quoteVersionId>:<decision>". Hiermee levert tweemaal klikken op
+  /// akkoord één beslissing en dus nooit twee orders.
+  idempotencyKey String @unique
+
+  isDemo Boolean @default(false)
+
+  @@index([quoteVersionId])
+  @@map("quote_approvals")
+}
+
+// --- Orders ----------------------------------------------------------------
+// Een order ontstaat uit een geaccepteerde offerteversie (ADR-0007) of wordt
+// rechtstreeks aangemaakt. Offertes staan in hun eigen aggregaat hieronder.
 
 model Order {
-  id     String    @id @default(uuid()) @db.Uuid
-  number String    @unique
-  kind   OrderKind @default(QUOTE)
+  id     String @id @default(uuid()) @db.Uuid
+  number String @unique
+
+  /// De geaccepteerde offerteversie waaruit deze order is ontstaan. Leeg bij
+  /// een order die zonder offerte is aangemaakt. Eén op één: uit één
+  /// geaccepteerde versie komt nooit meer dan één order.
+  quoteVersionId String?       @unique @db.Uuid
+  quoteVersion   QuoteVersion? @relation(fields: [quoteVersionId], references: [id], onDelete: Restrict)
 
   customerId      String         @db.Uuid
   customer        Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -717,10 +969,9 @@ model Order {
   reference String?
   notes     String?
 
-  /// Bij conversie offerte -> order blijft de herkomst zichtbaar.
-  convertedFromOrderId String? @unique @db.Uuid
-  convertedFromOrder   Order?  @relation("QuoteConversion", fields: [convertedFromOrderId], references: [id], onDelete: SetNull)
-  convertedToOrder     Order?  @relation("QuoteConversion")
+  /// Teller voor optimistic locking. Twee gelijktijdige wijzigingen leveren
+  /// één winnaar en voor de ander een duidelijke melding.
+  version Int @default(0)
 
   /// Totalen worden altijd server-side herberekend uit de vastgelegde
   /// regelwaarden, nooit uit de live productprijs.
@@ -741,7 +992,6 @@ model Order {
 
   @@index([customerId])
   @@index([status])
-  @@index([kind, status])
   @@index([ownerId])
   @@index([orderDate])
   @@map("orders")
@@ -752,6 +1002,13 @@ model OrderLine {
   orderId    String @db.Uuid
   order      Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   lineNumber Int
+
+  /// Herkomst: de offerteregel waaruit deze orderregel is overgenomen.
+  quoteItemId String?    @db.Uuid
+  quoteItem   QuoteItem? @relation(fields: [quoteItemId], references: [id], onDelete: SetNull)
+
+  /// Teller voor optimistic locking.
+  version Int @default(0)
 
   productId         String?          @db.Uuid
   product           Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
@@ -879,6 +1136,10 @@ model Document {
   orderLineId String?    @db.Uuid
   orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
 
+  quoteId           String?          @db.Uuid
+  quote             Quote?           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteVersionId    String?          @db.Uuid
+  quoteVersion      QuoteVersion?    @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
   proofId           String?          @db.Uuid
   proof             Proof?           @relation(fields: [proofId], references: [id], onDelete: Cascade)
   purchaseOrderId   String?          @db.Uuid
@@ -898,6 +1159,8 @@ model Document {
   @@index([customerId])
   @@index([orderId])
   @@index([category])
+  @@index([quoteId])
+  @@index([quoteVersionId])
   @@index([proofId])
   @@index([purchaseOrderId])
   @@index([purchaseInvoiceId])
@@ -939,6 +1202,8 @@ model Task {
 
   orderId    String?   @db.Uuid
   order      Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  quoteId    String?   @db.Uuid
+  quote      Quote?    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   customerId String?   @db.Uuid
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -953,6 +1218,7 @@ model Task {
 
   @@index([assigneeId, status])
   @@index([orderId])
+  @@index([quoteId])
   @@index([dueDate])
   @@map("tasks")
 }

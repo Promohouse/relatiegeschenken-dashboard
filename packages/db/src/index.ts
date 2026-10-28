@@ -1,4 +1,5 @@
 export * from './client'
 export * from './numbering'
 export * from './connectors'
+export * from './quotes'
 export { Prisma, PrismaClient } from '@prisma/client'
