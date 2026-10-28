@@ -6,6 +6,12 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Contactpersonen en adressen beheren vanuit het scherm. Hoogstens één
+  hoofdcontact per klant en één standaardadres per soort, allebei door de
+  service geregeld in plaats van door het formulier. Nederlandse postcodes
+  worden gecontroleerd en genormaliseerd naar 1234 AB; buitenlandse blijven
+  zoals ze zijn. Een adres dat aan een order, offerte of zending hangt kan
+  niet verwijderd worden, met vermelding waar het gebruikt wordt. 259 tests.
 - Klanten aanmaken en wijzigen vanuit het scherm, met foutmeldingen bij het
   veld waar ze horen, en op inactief zetten met een bevestiging die zegt dat
   er niets verloren gaat. Knoppen verschijnen alleen bij het juiste recht.

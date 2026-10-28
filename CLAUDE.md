@@ -179,6 +179,10 @@ Twee dingen bij het schrijven van e2e-tests:
 - Een test die gegevens aanmaakt ruimt ze achteraf zelf op, rechtstreeks via
   `@rgh/db` en op een eigen voorvoegsel. Er is bewust geen verwijder-endpoint:
   klanten horen niet verwijderd te worden, dus kan de applicatie dat niet.
+- Wacht expliciet op de doelpagina voordat je op een knop klikt waarvan de
+  tekst ook op de vorige pagina voorkomt. "Op inactief zetten" staat zowel op
+  de klant als op een contactpersoon; zonder die wachtstap klikte de test de
+  verkeerde aan, en dat ziet er precies uit als een applicatiefout.
 
 ## Beveiliging: twee dingen die je moet weten
 

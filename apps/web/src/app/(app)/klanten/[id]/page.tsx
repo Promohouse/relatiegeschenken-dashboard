@@ -104,18 +104,44 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
         </section>
 
         <section className="rounded border border-rule bg-surface p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <User size={14} aria-hidden className="text-ink-faint" />
-            Contactpersonen
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <User size={14} aria-hidden className="text-ink-faint" />
+              Contactpersonen
+            </h2>
+            {mag(user, 'customers:update') && (
+              <Link
+                href={`/klanten/${klant.id}/contactpersonen/nieuw`}
+                className="text-xs font-medium text-accent hover:underline"
+              >
+                Toevoegen
+              </Link>
+            )}
+          </div>
           <ul className="mt-3 grid gap-3">
             {klant.contacts.map((c) => (
               <li key={c.id}>
                 <p className="text-sm font-medium">
-                  {c.firstName} {c.lastName}
+                  {mag(user, 'customers:update') ? (
+                    <Link
+                      href={`/klanten/${klant.id}/contactpersonen/${c.id}`}
+                      className="hover:text-accent"
+                    >
+                      {c.firstName} {c.lastName}
+                    </Link>
+                  ) : (
+                    <>
+                      {c.firstName} {c.lastName}
+                    </>
+                  )}
                   {c.isPrimary && (
                     <Badge tone="ok" className="ml-2">
                       hoofdcontact
+                    </Badge>
+                  )}
+                  {!c.isActive && (
+                    <Badge tone="rest" className="ml-2">
+                      inactief
                     </Badge>
                   )}
                 </p>
@@ -141,10 +167,20 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
         </section>
 
         <section className="rounded border border-rule bg-surface p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <MapPin size={14} aria-hidden className="text-ink-faint" />
-            Adressen
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <MapPin size={14} aria-hidden className="text-ink-faint" />
+              Adressen
+            </h2>
+            {mag(user, 'customers:update') && (
+              <Link
+                href={`/klanten/${klant.id}/adressen/nieuw`}
+                className="text-xs font-medium text-accent hover:underline"
+              >
+                Toevoegen
+              </Link>
+            )}
+          </div>
           <ul className="mt-3 grid gap-3">
             {klant.addresses.map((a) => (
               <li key={a.id}>
@@ -152,12 +188,21 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
                   {ADRESSOORT[a.type] ?? a.type}
                   {a.isDefault && ' · standaard'}
                 </p>
-                <p className="text-sm">
-                  {a.street} {a.houseNumber}
-                  <br />
-                  {a.postalCode} {a.city}
-                  {a.country !== 'NL' && <> ({a.country})</>}
-                </p>
+                {mag(user, 'customers:update') ? (
+                  <Link href={`/klanten/${klant.id}/adressen/${a.id}`} className="block text-sm hover:text-accent">
+                    {a.street} {a.houseNumber}
+                    <br />
+                    {a.postalCode} {a.city}
+                    {a.country !== 'NL' && <> ({a.country})</>}
+                  </Link>
+                ) : (
+                  <p className="text-sm">
+                    {a.street} {a.houseNumber}
+                    <br />
+                    {a.postalCode} {a.city}
+                    {a.country !== 'NL' && <> ({a.country})</>}
+                  </p>
+                )}
               </li>
             ))}
             {klant.addresses.length === 0 && (

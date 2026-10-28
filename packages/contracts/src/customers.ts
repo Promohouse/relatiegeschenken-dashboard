@@ -31,11 +31,20 @@ const btwVeld = () =>
       'Een Nederlands btw-nummer ziet eruit als NL123456789B01',
     )
 
+/**
+ * Verplicht tekstveld met één melding voor alle manieren waarop het fout kan
+ * gaan: ontbrekend, leeg, of te kort. Zonder de `error`-optie geeft een
+ * ontbrekend veld een Engelse technische melding, en die komt in het scherm
+ * terecht.
+ */
+export const verplichteTekst = (melding: string, { min = 1, max = 200 } = {}) =>
+  z.string({ error: melding }).trim().min(min, melding).max(max)
+
 export const leegNaarNull = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((v) => (v === '' || v === undefined ? null : v), schema.nullable())
 
 export const createCustomerSchema = z.object({
-  name: z.string().trim().min(2, 'Vul een bedrijfsnaam in').max(200),
+  name: verplichteTekst('Vul een bedrijfsnaam in', { min: 2 }),
   vatNumber: leegNaarNull(btwVeld()).optional(),
   email: leegNaarNull(emailVeld()).optional(),
   phone: leegNaarNull(z.string().trim().max(40)).optional(),
@@ -86,6 +95,7 @@ export const customerAddressSchema = z.object({
   id: z.string(),
   type: z.enum(['INVOICE', 'DELIVERY']),
   label: z.string().nullable(),
+  attention: z.string().nullable(),
   street: z.string(),
   houseNumber: z.string().nullable(),
   postalCode: z.string(),

@@ -132,7 +132,7 @@ export class CustomersService {
         isPrimary: c.isPrimary, isActive: c.isActive,
       })),
       addresses: klant.addresses.map((a) => ({
-        id: a.id, type: a.type, label: a.label, street: a.street,
+        id: a.id, type: a.type, label: a.label, attention: a.attention, street: a.street,
         houseNumber: a.houseNumber, postalCode: a.postalCode, city: a.city,
         country: a.country, isDefault: a.isDefault,
       })),
