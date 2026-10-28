@@ -22,7 +22,8 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | `external_references` toevoegen | gereed: twee unieke sleutels, idempotente upsert, 7 tests |
 | ✅ | `shipments` en `shipment_items` | gereed: deelzendingen, meerdere adressen, tracking, pakbon; afleidlogica in contracts; 8 tests plus 13 op de logica |
 | ✅ | `print_positions` als entiteit | gereed: verplichte verwijzing vanuit bedrukopties, oorspronkelijke leveranciersbenaming bewaard, vastgezette offerteversies ongemoeid |
-| ◻ | API-fundament NestJS | configuratie, foutafhandeling, auditlog-interceptor, OpenAPI op `/docs`, healthcheck |
+| ✅ | API-fundament NestJS (3a) | gereed: omgevingsvalidatie met veiligheidsslot, domeinfouten en één foutvorm, Prisma-service, healthcheck, OpenAPI uit Zod op `/docs`; 28 tests |
+| ◻ | API-fundament (3b) | auditlog-interceptor, verzoekcontext, nummeruitgifte en prijsengine achter services |
 | ◻ | Nummerreeksen en prijsengine achter services | nummeruitgifte onder lock via de service; prijsengine lost `price_rules` op naar een verkoopprijs, met tests |
 | ◻ | Authenticatie en MFA (D-04) | inloggen, sessie, MFA, wachtwoordherstel; tests die **weigering** aantonen |
 | ◻ | Rechten-guard | elk endpoint heeft een permissie; een test per module die 403 verwacht |

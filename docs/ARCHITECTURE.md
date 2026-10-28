@@ -81,7 +81,7 @@ Vastgelegd, met de reden erbij:
 | Validatie | Zod, in `packages/contracts` | één schema voor front- en backend |
 | Achtergrondtaken | Redis + BullMQ | zie DECISIONS.md D-03 (nu pg-boss) |
 | Bestandsopslag | S3-compatibel achter `StoragePort` | lokaal een schijf-adapter, productie objectopslag |
-| API-contract | OpenAPI, types gegenereerd naar `packages/contracts` | nooit handmatig types natypen |
+| API-contract | OpenAPI, gegenereerd uit de Zod-schema's | één schema voor validatie, types en documentatie; zie ADR-0011 |
 | Tests | Vitest (unit en integratie), Playwright (end-to-end) | |
 | Observability | OpenTelemetry | traces over HTTP, jobs en externe aanroepen |
 | Containers | Docker, Kubernetes, Helm | zie DEPLOYMENT.md |

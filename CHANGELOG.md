@@ -6,6 +6,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- API-fundament in NestJS (`apps/api`): omgevingsvalidatie die bij het
+  opstarten faalt met een leesbare melding en het databasevoorvoegsel
+  afdwingt, domeinfouten met één uniforme foutvorm, Prisma-service,
+  healthcheck op `/api/health` en OpenAPI op `/docs` gegenereerd uit de
+  Zod-schema's. 150 tests.
+- ADR-0011: Zod als enige bron voor validatie, types en documentatie, en de
+  valkuil rond decorator-metadata in runtime en tests.
 - Uitgaande zendingen (`shipments`, `shipment_items`) met deelleveringen,
   meerdere afleveradressen, tracking en pakbonnen. LogisticsStatus is uitgaand
   gemaakt; de statussen worden afgeleid uit de zendingen en een deellevering

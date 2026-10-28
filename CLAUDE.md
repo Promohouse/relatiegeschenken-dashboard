@@ -139,6 +139,25 @@ npm run typecheck      # TypeScript over de hele monorepo
 - **Testgegevens** krijgen een uniek nummer via `test/helpers.ts`; vitest
   draait testbestanden parallel, dus een tijdstempel is niet uniek genoeg.
 
+## API: decorator-metadata moet overal gelijk zijn
+
+NestJS lost afhankelijkheden op via `emitDecoratorMetadata`. **esbuild en dus
+`tsx` stoten die metadata niet uit**, wat een onbegrijpelijke fout diep in de
+injector oplevert. Daarom:
+
+- draaien: `node -r @swc-node/register src/main.ts` (niet `tsx`)
+- testen: `unplugin-swc` in `apps/api/vitest.config.ts`
+- `configureApp()` wordt door `main.ts` en de tests gebruikt, zodat testopzet
+  en productieopzet niet uit elkaar lopen
+
+Validatie en OpenAPI komen uit Zod, niet uit class-validator. Zie ADR-0011.
+
+```bash
+npm run api:dev        # api met herstart bij wijzigingen, op poort 3101
+npm test               # alle workspaces
+npm run typecheck      # packages en api
+```
+
 ## Offertes zijn onveranderlijk
 
 Een offerteversie met `lockedAt` is door databasetriggers beschermd: wijzigen,
