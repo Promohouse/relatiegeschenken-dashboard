@@ -14,6 +14,8 @@ nieuwe die de oude vervangt.
 | [0004](architecture/0004-productdata-en-leverancierskoppelingen.md) | Directe leverancierskoppelingen, drie lagen, capability-routing | blijft staan, **maar de volgorde wijzigt**: CSV/XLSX-import eerst (D-06) |
 | [0005](architecture/0005-geld-prijzen-en-btw.md) | NUMERIC en Decimal, prijsmomentopname, btw per regel op twee decimalen, instelbare nummerreeksen | blijft staan; aanvulling: definitieve factuurnummers komen uit SnelStart |
 | [0006](architecture/0006-prisma-7-en-versievastzetting.md) | Prisma vastgezet op 7.10.0 | blijft staan |
+| [0007](architecture/0007-offertemodel-splitsen.md) | Offertes als eigen aggregaat met onveranderlijke versies | besloten 2026-10-28 |
+| [0008](architecture/0008-nestjs-als-backendframework.md) | NestJS blijft de backend | besloten 2026-10-28 |
 
 ## 2. Wat de masterprompt verandert
 
@@ -36,7 +38,9 @@ Niet alles is nieuw; dit is wat afwijkt van de opdracht van 8 oktober.
 
 ## 3. Open besluiten
 
-### D-01 — Offertemodel splitsen *(advies: ja)*
+### D-01 — Offertemodel splitsen — **BESLOTEN 2026-10-28: splitsen**
+
+Vastgelegd in [ADR-0007](architecture/0007-offertemodel-splitsen.md).
 
 Nu zijn offerte en order één aggregaat (`orders.kind`). De opdracht vraagt
 offerteversies en bij acceptatie "de exacte offerteversie bewaren". In het
@@ -50,7 +54,9 @@ Advies: splitsen naar `quotes` / `quote_versions` / `quote_items` /
 Er is nog geen echte data, dus nu is dit bijna gratis; met orders eraan is het
 een verbouwing.
 
-### D-02 — NestJS behouden *(advies: ja)*
+### D-02 — NestJS behouden — **BESLOTEN 2026-10-28: behouden**
+
+Vastgelegd in [ADR-0008](architecture/0008-nestjs-als-backendframework.md).
 
 De opdracht noemt TypeScript, Next.js en React, maar geen backendframework.
 NestJS staat er nu in en levert modules, dependency injection, guards,
@@ -61,7 +67,34 @@ dit expliciet bevestigd hebben. Alternatief: Next.js route handlers met een
 eigen servicelaag; dat werkt, maar modulegrenzen en autorisatie zijn dan
 discipline in plaats van structuur.
 
-### D-03 — Achtergrondtaken: Redis en BullMQ, of pg-boss *(advies: BullMQ)*
+### D-03 — Achtergrondtaken: Redis en BullMQ, of pg-boss *(advies: BullMQ, vraag over kosten beantwoord)*
+
+**Licenties en kosten, nagekeken op 2026-10-28:**
+
+- **BullMQ** is MIT-gelicentieerd en volledig kosteloos, zonder beperkingen op
+  functies of gebruik. Dat omvat vertraagde taken, retries, prioriteiten,
+  concurrency, rate limiting en herhalende taken. **BullMQ Pro** (groups,
+  batches, observables) kost 139 dollar per maand of 1.395 dollar per jaar per
+  deployment - die functies hebben wij niet nodig.
+- **Redis** is sinds versie 8 (mei 2025) drievoudig gelicentieerd, waaronder
+  AGPLv3, een door de OSI erkende open-sourcelicentie. Zelf hosten voor intern
+  gebruik binnen de eigen organisatie is kosteloos toegestaan.
+- **Valkey** is een BSD-3-Clause fork van Redis onder de Linux Foundation,
+  drop-in compatibel en zonder enige licentiediscussie.
+- Een wachtrij-dashboard hoeft niet uit BullMQ Pro te komen: **bull-board** is
+  MIT en kosteloos.
+
+Werkelijke kosten zijn dus uitsluitend hosting. In het eigen Kubernetes-cluster
+is dat de resourcevoetafdruk, die voor deze wachtrij klein is. Een beheerde
+Redis bij een hostingpartij kost grofweg enkele tot enkele tientallen euro's
+per maand. Lokaal is het kosteloos via Homebrew.
+
+**Advies: BullMQ met Valkey.** Valkey omzeilt de licentievraag volledig en is
+compatibel. De transactional outbox blijft in PostgreSQL, los van deze keuze.
+
+---
+
+#### Oorspronkelijke afweging
 
 De opdracht noemt Redis en BullMQ; nu staat pg-boss in het ontwerp omdat er
 lokaal geen Docker en geen Redis is. Met Kubernetes in beeld is Redis geen
