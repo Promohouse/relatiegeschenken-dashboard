@@ -251,6 +251,14 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- **De calculator zoekt een product in plaats van het uit een lijst te kiezen.**
+  Met 2790 artikelen is een keuzelijst onbruikbaar; bovendien toonde die
+  alleen de eerste honderd. Nu typ je een artikelnummer of naam. Is er precies
+  één artikel met dat nummer, dan wordt dat meteen gekozen — intypen en verder,
+  in plaats van zoeken, kiezen, laden.
+- De productkiezer is nu één component, gedeeld met het prijsafsprakenscherm.
+  Vanaf een productpagina is er een knop **Doorrekenen** die de calculator met
+  dat product opent.
 - **Lezen uit de productieomgeving van een leverancier mag nu ook buiten
   productie.** De eerdere regel weigerde dat helemaal. Dat bleek te streng: een
   catalogus lezen raakt geen klant, geen betaling en geen factuur — waar harde

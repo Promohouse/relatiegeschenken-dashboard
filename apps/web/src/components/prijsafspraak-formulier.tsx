@@ -4,114 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { PriceAgreementView, ProductPickerItem } from '@rgh/contracts'
 import { Aanvinkveld, FormVeld, FormVoet, useOpslaan } from './deelformulier'
+import { ProductKiezer } from './product-kiezer'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-
-/** Zoekt in de catalogus; de keuze is een product, niet een vrije tekst. */
-function Productkiezer({
-  gekozen, fout, onKies,
-}: {
-  gekozen: ProductPickerItem | null
-  fout?: string
-  onKies: (product: ProductPickerItem | null) => void
-}) {
-  const [term, setTerm] = useState('')
-  const [treffers, setTreffers] = useState<ProductPickerItem[]>([])
-  const [bezig, setBezig] = useState(false)
-  const [melding, setMelding] = useState<string | null>(null)
-
-  async function zoek() {
-    if (term.trim().length === 0) return
-    setBezig(true)
-    setMelding(null)
-    try {
-      const res = await fetch(`/api/products/search?q=${encodeURIComponent(term.trim())}`)
-      if (!res.ok) {
-        setMelding('Zoeken lukte niet.')
-        return
-      }
-      const gevonden = (await res.json()) as ProductPickerItem[]
-      setTreffers(gevonden)
-      if (gevonden.length === 0) setMelding('Geen product gevonden.')
-    } catch {
-      setMelding('De server is niet bereikbaar.')
-    } finally {
-      setBezig(false)
-    }
-  }
-
-  if (gekozen) {
-    return (
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-ink-soft">Product</span>
-        <div className="flex items-center gap-3">
-          <p className="text-sm">
-            {gekozen.name}
-            <span className="block font-[family-name:var(--font-mono)] text-xs text-ink-faint">
-              {gekozen.articleNumber}
-            </span>
-          </p>
-          <button
-            type="button"
-            onClick={() => onKies(null)}
-            className="text-xs font-medium text-accent hover:underline"
-          >
-            anders kiezen
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="productzoeken" className="text-sm font-medium text-ink-soft">
-        Product
-      </label>
-      <div className="flex gap-2">
-        <Input
-          id="productzoeken"
-          value={term}
-          placeholder="Artikelnummer of naam"
-          onChange={(e) => setTerm(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              // Anders verstuurt Enter het hele formulier zonder product.
-              e.preventDefault()
-              void zoek()
-            }
-          }}
-        />
-        <Button type="button" variant="secondary" size="sm" disabled={bezig} onClick={() => void zoek()}>
-          {bezig ? 'Zoeken…' : 'Zoeken'}
-        </Button>
-      </div>
-      {fout && <p className="text-xs text-alarm">{fout}</p>}
-      {melding && <p className="text-xs text-ink-faint">{melding}</p>}
-      {treffers.length > 0 && (
-        <ul className="divide-y divide-rule rounded border border-rule">
-          {treffers.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                onClick={() => onKies(p)}
-                className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-sunk"
-              >
-                <span>
-                  {p.name}
-                  {!p.isActive && <span className="text-ink-faint"> (inactief)</span>}
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-xs text-ink-faint">
-                  {p.articleNumber}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
 
 export function PrijsafspraakFormulier({
   klantId,
@@ -179,7 +73,7 @@ export function PrijsafspraakFormulier({
       <div className="grid gap-4 rounded border border-rule bg-surface p-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           {nieuw ? (
-            <Productkiezer gekozen={product} fout={fouten.productId} onKies={setProduct} />
+            <ProductKiezer gekozen={product} fout={fouten.productId} onKies={setProduct} />
           ) : (
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink-soft">Product</span>

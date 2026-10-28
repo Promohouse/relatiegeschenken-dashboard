@@ -1,7 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { formatEuro, type ProductDetail, type QuoteLineCalculation } from '@rgh/contracts'
+import Link from 'next/link'
+import {
+  formatEuro,
+  type ProductDetail, type ProductPickerItem, type QuoteLineCalculation,
+} from '@rgh/contracts'
+import { ProductKiezer } from './product-kiezer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -28,12 +33,16 @@ function Bedrag({ label, waarde, groot = false, alarm = false }: {
 }
 
 export function Calculator({
-  product,
+  beginProduct,
   klanten,
 }: {
-  product: ProductDetail
+  /** Product uit de URL, bijvoorbeeld via "Doorrekenen" op de productpagina. */
+  beginProduct: ProductDetail | null
   klanten: { id: string; name: string }[]
 }) {
+  const [product, setProduct] = useState<ProductDetail | null>(beginProduct)
+  const [laadFout, setLaadFout] = useState<string | null>(null)
+  const [laden, setLaden] = useState(false)
   const [quantity, setQuantity] = useState('250')
   const [customerId, setCustomerId] = useState('')
   const [gekozenDruk, setGekozenDruk] = useState<Record<string, number>>({})
@@ -46,6 +55,36 @@ export function Calculator({
   const [fout, setFout] = useState<string | null>(null)
   const [bezig, setBezig] = useState(false)
 
+  /**
+   * Na het kiezen het volledige product ophalen: de zoekfunctie geeft alleen
+   * nummer en naam, en voor de bedrukopties is het detail nodig.
+   */
+  async function kies(keuze: ProductPickerItem | null) {
+    setUitkomst(null)
+    setGekozenDruk({})
+    setFout(null)
+    setLaadFout(null)
+
+    if (!keuze) {
+      setProduct(null)
+      return
+    }
+
+    setLaden(true)
+    try {
+      const res = await fetch(`/api/products/${keuze.id}`)
+      if (!res.ok) {
+        setLaadFout('Dit product kon niet geladen worden.')
+        return
+      }
+      setProduct((await res.json()) as ProductDetail)
+    } catch {
+      setLaadFout('De server is niet bereikbaar.')
+    } finally {
+      setLaden(false)
+    }
+  }
+
   async function reken() {
     setBezig(true)
     setFout(null)
@@ -55,7 +94,7 @@ export function Calculator({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId: product.id,
+          productId: product!.id,
           quantity,
           ...(customerId ? { customerId } : {}),
           printOptionIds: ids,
@@ -87,6 +126,38 @@ export function Calculator({
       <div className="rounded border border-rule bg-surface p-5">
         <h2 className="text-sm font-semibold">Wat wordt er gevraagd</h2>
 
+        <div className="mt-4">
+          <ProductKiezer
+            gekozen={
+              product
+                ? {
+                    id: product.id,
+                    articleNumber: product.articleNumber,
+                    name: product.name,
+                    isActive: product.isActive,
+                  }
+                : null
+            }
+            onKies={(keuze) => void kies(keuze)}
+          />
+          {laden && <p className="mt-1 text-xs text-ink-faint">Productgegevens ophalen…</p>}
+          {laadFout && <p className="mt-1 text-xs text-alarm">{laadFout}</p>}
+          {product && (
+            <p className="mt-1 text-xs text-ink-faint">
+              {product.variantCount} varianten ·{' '}
+              <Link href={`/producten/${product.id}`} className="text-accent hover:underline">
+                naar het product
+              </Link>
+            </p>
+          )}
+        </div>
+
+        {!product ? (
+          <p className="mt-4 text-sm text-ink-faint">
+            Zoek eerst een product op artikelnummer of naam.
+          </p>
+        ) : (
+        <>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="quantity" className="text-sm font-medium text-ink-soft">
@@ -116,11 +187,11 @@ export function Calculator({
           </div>
         </div>
 
-        {product.printOptions.length > 0 && (
+        {product!.printOptions.length > 0 && (
           <fieldset className="mt-5">
             <legend className="text-sm font-medium text-ink-soft">Bedrukking</legend>
             <div className="mt-2 grid gap-2">
-              {product.printOptions.map((optie) => {
+              {product!.printOptions.map((optie) => {
                 const aan = optie.id in gekozenDruk
                 return (
                   <div key={optie.id} className="flex flex-wrap items-center gap-3 text-sm">
@@ -220,6 +291,8 @@ export function Calculator({
           <p role="status" className="mt-3 rounded border border-alarm/30 bg-alarm-bg px-3 py-2 text-sm text-alarm">
             {fout}
           </p>
+        )}
+        </>
         )}
       </div>
 

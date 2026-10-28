@@ -63,7 +63,15 @@ export default async function ProductPagina({ params }: { params: Promise<{ id: 
           </p>
         </div>
 
-        <div className="flex gap-6 text-right">
+        <div className="flex items-center gap-6 text-right">
+          {mag(user, 'quotes:view') && (
+            <Link
+              href={`/calculator?product=${product.id}`}
+              className="inline-flex h-8 items-center rounded border border-rule-strong bg-surface px-3 text-sm font-medium transition-colors hover:bg-sunk"
+            >
+              Doorrekenen
+            </Link>
+          )}
           <div>
             <p className="text-2xl font-bold tabular">{product.variantCount}</p>
             <p className="text-xs uppercase tracking-wide text-ink-faint">Varianten</p>

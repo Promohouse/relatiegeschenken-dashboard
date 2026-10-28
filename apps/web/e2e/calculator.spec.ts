@@ -15,18 +15,60 @@ async function logIn(page: Page) {
   await expect(page).toHaveURL('http://localhost:3100/')
 }
 
-/** De calculator openen op de demobeker, die staffels en bedrukopties heeft. */
+/**
+ * De calculator openen op de demobeker, die staffels en bedrukopties heeft.
+ * Via het zoekveld, zoals een gebruiker het doet.
+ */
 async function openBeker(page: Page) {
-  await page.goto('/producten?search=DEMO-1001')
-  const href = await page.getByRole('link', { name: 'Thermosbeker Rivo 350 ml' }).getAttribute('href')
-  const id = href!.split('/').pop()
-  await page.goto(`/calculator?product=${id}`)
+  await page.goto('/calculator')
   await expect(page.getByRole('heading', { name: 'Calculator' })).toBeVisible()
+  await page.getByLabel('Product').fill('DEMO-1001')
+  await page.getByRole('button', { name: 'Zoeken' }).click()
+  // Exact artikelnummer: die wordt meteen gekozen, zonder tussenstap.
+  await expect(page.getByText('Thermosbeker Rivo 350 ml')).toBeVisible()
+  await expect(page.getByLabel('Aantal')).toBeVisible()
 }
 
 test.describe.configure({ mode: 'serial' })
 
 test.describe('calculator', () => {
+  test('zoekt een product op naam en laat kiezen uit de treffers', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/calculator')
+
+    // Zonder product valt er niets te rekenen.
+    await expect(page.getByText('Zoek eerst een product op artikelnummer of naam.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Doorrekenen' })).toHaveCount(0)
+
+    await page.getByLabel('Product').fill('Thermosbeker')
+    await page.getByRole('button', { name: 'Zoeken' }).click()
+
+    // Geen exacte treffer op artikelnummer: dan kiest de gebruiker zelf.
+    await page.getByRole('button', { name: /Thermosbeker Rivo 350 ml/ }).click()
+    await expect(page.getByLabel('Aantal')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'naar het product' })).toBeVisible()
+  })
+
+  test('zegt het als een artikelnummer niets oplevert', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/calculator')
+
+    await page.getByLabel('Product').fill('BESTAAT-NIET-9999')
+    await page.getByRole('button', { name: 'Zoeken' }).click()
+    await expect(page.getByText('Geen product gevonden voor "BESTAAT-NIET-9999".')).toBeVisible()
+  })
+
+  test('opent met een product uit de URL, vanaf de productpagina', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/producten?search=DEMO-1001')
+    await page.getByRole('link', { name: 'Thermosbeker Rivo 350 ml' }).click()
+    await page.getByRole('link', { name: 'Doorrekenen' }).click()
+
+    await expect(page.getByRole('heading', { name: 'Calculator' })).toBeVisible()
+    await expect(page.getByLabel('Aantal')).toBeVisible()
+    await expect(page.getByText('Thermosbeker Rivo 350 ml')).toBeVisible()
+  })
+
   test('rekent een regel door met staffel, btw en marge', async ({ page }) => {
     await logIn(page)
     await openBeker(page)
