@@ -31,15 +31,27 @@ export function effectiveVatRate(regime: VatRegime, vatRate: Decimal.Value): Mon
 }
 
 export interface PrintJobInput {
-  /** Bedrukkingskosten per stuk. */
+  /** Wat wij de klant per stuk rekenen voor deze bedrukking. */
   unitPrice: Decimal.Value
-  /** Eenmalige instelkosten voor deze bedrukking. */
+  /** Eenmalige instelkosten voor deze bedrukking, zoals wij die doorberekenen. */
   setupCost: Decimal.Value
+  /**
+   * Wat de bedrukking ons per stuk kost. Telt mee in de inkoop en dus in de
+   * marge.
+   *
+   * Zonder dit lijkt drukwerk gratis ingekocht en valt de marge te hoog uit -
+   * bij een order met veel posities scheelt dat tientallen procenten. Optioneel
+   * voor bestaande aanroepers, maar wie een marge toont hoort het te vullen.
+   */
+  unitPurchaseCost?: Decimal.Value
+  /** Wat de instelkosten ons eenmalig kosten. */
+  setupPurchaseCost?: Decimal.Value
 }
 
 export interface OrderLineInput {
   quantity: number
   unitSalePrice: Decimal.Value
+  /** Inkoopprijs van het artikel zelf, per stuk. */
   unitPurchasePrice?: Decimal.Value
   /** Kortingspercentage op de verkoopprijs, 0-100. */
   discountPercent?: Decimal.Value
@@ -84,7 +96,19 @@ export function calculateOrderLine(input: OrderLineInput): OrderLineTotals {
   const vatAmount = round2(subtotalExclVat.times(rate).dividedBy(100))
   const totalInclVat = round2(subtotalExclVat.plus(vatAmount))
 
-  const purchaseTotal = round2(quantity.times(input.unitPurchasePrice ?? 0))
+  // De inkoop is het artikel plus het drukwerk. Instelkosten die wij zelf
+  // betalen horen er ook bij: die zijn eenmalig, niet per stuk.
+  const unitPrintPurchase = printJobs.reduce(
+    (sum, j) => sum.plus(j.unitPurchaseCost ?? 0),
+    new Decimal(0),
+  )
+  const setupPurchase = printJobs.reduce(
+    (sum, j) => sum.plus(j.setupPurchaseCost ?? 0),
+    new Decimal(0),
+  )
+  const purchaseTotal = round2(
+    quantity.times(new Decimal(input.unitPurchasePrice ?? 0).plus(unitPrintPurchase)).plus(setupPurchase),
+  )
   const marginAmount = round2(subtotalExclVat.minus(purchaseTotal))
   const marginPercent = subtotalExclVat.isZero()
     ? new Decimal(0)

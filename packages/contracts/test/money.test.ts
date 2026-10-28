@@ -90,3 +90,47 @@ describe('weergave', () => {
     expect(formatEuro('1234.5')).toContain('1.234,50')
   })
 })
+
+describe('inkoopkant van drukwerk', () => {
+  // Zonder de inkoopkant van drukwerk lijkt bedrukken gratis ingekocht, en
+  // valt de marge te hoog uit. Bij meerdere posities loopt dat snel op.
+  const basis = {
+    quantity: 250,
+    unitSalePrice: '10.0000',
+    unitPurchasePrice: '4.0000',
+    vatRate: 21,
+  }
+
+  it('telt de drukkosten mee in de inkoop en dus in de marge', () => {
+    const zonder = calculateOrderLine({
+      ...basis,
+      printJobs: [{ unitPrice: '1.0000', setupCost: '50.0000' }],
+    })
+    const met = calculateOrderLine({
+      ...basis,
+      printJobs: [{
+        unitPrice: '1.0000', setupCost: '50.0000',
+        unitPurchaseCost: '0.6000', setupPurchaseCost: '30.0000',
+      }],
+    })
+
+    // De verkoopkant is in beide gevallen gelijk: 250 * 11 + 50.
+    expect(zonder.subtotalExclVat.toFixed(2)).toBe('2800.00')
+    expect(met.subtotalExclVat.toFixed(2)).toBe('2800.00')
+
+    // De inkoop niet: 250 * 4 versus 250 * 4,60 plus 30 instelkosten.
+    expect(zonder.purchaseTotal.toFixed(2)).toBe('1000.00')
+    expect(met.purchaseTotal.toFixed(2)).toBe('1180.00')
+
+    expect(zonder.marginAmount.toFixed(2)).toBe('1800.00')
+    expect(met.marginAmount.toFixed(2)).toBe('1620.00')
+  })
+
+  it('laat de uitkomst ongemoeid als de inkoopkant niet is opgegeven', () => {
+    const uitkomst = calculateOrderLine({
+      ...basis,
+      printJobs: [{ unitPrice: '1.0000', setupCost: '50.0000' }],
+    })
+    expect(uitkomst.purchaseTotal.toFixed(2)).toBe('1000.00')
+  })
+})

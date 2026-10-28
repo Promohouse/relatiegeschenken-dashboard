@@ -71,7 +71,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 
 | | Taak | Acceptatiecriterium |
 |---|---|---|
-| ◻ | Offertecalculator | product, staffel, bedrukking per positie, instelkosten, transport, overige kosten, korting, gewenste marge, btw; handmatige prijsaanpassing herberekent de werkelijke marge |
+| ✅ | Offertecalculator | gereed: inkoopstaffel, prijsregel of klantafspraak, bedrukking per positie met eigen marge, korting, instelkosten en btw-regime; een handmatige prijs herberekent de werkelijke marge en de berekende prijs blijft zichtbaar. Transport en overige kosten volgen met de offerte zelf |
 | ◻ | Offerteversies | een verzonden versie is onveranderlijk; een wijziging maakt een nieuwe versie |
 | ◻ | PDF-offerte | logo, bedrijfsgegevens, productafbeeldingen, specificaties, prijzen, levervoorwaarden, akkoordmogelijkheid |
 | ◻ | Digitaal akkoord in het portaal | alleen een bevoegde goedkeurder; tweemaal klikken levert één order |

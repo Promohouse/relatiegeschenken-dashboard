@@ -88,13 +88,13 @@ test.describe('producten', () => {
     await expect(page.getByRole('heading', { name: 'Bedrukopties' })).toBeVisible()
   })
 
-  test('zegt onbekend als de leverancier geen voorraad meldde', async ({ page }) => {
+  test('houdt onbekende voorraad en nul uit elkaar', async ({ page }) => {
     await logIn(page)
-    await page.goto('/producten')
-    await page.getByRole('link', { name: 'Thermosbeker Rivo 350 ml' }).click()
 
+    // De balpen heeft geen gemelde voorraad: dat is "onbekend", niet nul.
+    await page.goto('/producten?search=DEMO-1002')
+    await page.getByRole('link', { name: 'Balpen Metal Pure' }).click()
     const varianten = page.locator('section', { has: page.getByRole('heading', { name: 'Varianten' }) })
-    // Onbekend is iets anders dan nul, en dat hoort te zien te zijn.
     await expect(varianten.getByText('onbekend').first()).toBeVisible()
     await expect(page.getByText('Op voorraad')).toBeVisible()
     await expect(

@@ -6,6 +6,20 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- **Offertecalculator** (`/calculator`). Van inkoopstaffel naar verkoopprijs,
+  met bedrukking per positie, korting, instelkosten en btw-regime. De uitkomst
+  zegt waar de prijs vandaan komt — prijsregel, klantafspraak of handmatig —
+  en wat de werkelijke marge is. Er wordt niets opgeslagen: een calculatie is
+  een vraag, geen handeling.
+- Een handmatige prijs laat de berekende prijs zichtbaar staan, zodat te zien
+  is wat er is weggegeven, en het drukwerk volgt de nieuwe marge in plaats van
+  de oude.
+- Drukwerk volgt standaard de marge van het artikel, zodat een offerte niet per
+  ongeluk bedrukking zonder marge bevat. Een eigen percentage kan.
+- De calculator waarschuwt in plaats van te blokkeren: te weinig voorraad bij
+  de leverancier (met de stand, het tijdstip en de eerstvolgende levering),
+  een inkoopprijs van nul, en een ontbrekende drukstaffel — daar wordt geen
+  prijs verzonnen maar om een handmatig bedrag gevraagd.
 - **Voorraadimport.** Standen per variant, met de eerstvolgende twee verwachte
   leveringen. Op het productscherm staat per variant het aantal met erbij hoe
   oud die stand is, en in de kop de opgetelde voorraad.
@@ -237,6 +251,10 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- **De inkoop van drukwerk telt mee in de marge.** De regelberekening nam
+  alleen de inkoopprijs van het artikel mee; de kosten van bedrukken telden
+  wel in de verkoop maar niet in de inkoop. Daardoor viel de marge te hoog uit,
+  en bij een order met meerdere drukposities liep dat snel op.
 - Voorraad van midocean wordt twee keer per dag opgehaald in plaats van elk
   uur: een voorraadstand per uur is voor dit werk niet nodig.
 - **Een fout van een leverancier geeft 502 in plaats van 500.** Bij de eerste
