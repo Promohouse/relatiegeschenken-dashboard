@@ -21,8 +21,11 @@ test.describe('producten', () => {
   test('toont de catalogus met leverancier en inkoopprijs', async ({ page }) => {
     await logIn(page)
     await page.getByRole('complementary').getByRole('link', { name: 'Producten' }).click()
-
     await expect(page.getByRole('heading', { name: 'Producten' })).toBeVisible()
+
+    // Zoeken, niet bladeren: de catalogus telt duizenden artikelen zodra er
+    // een echte import gedraaid is.
+    await page.goto('/producten?search=DEMO-1001')
     const rij = page.locator('tr', { hasText: 'Thermosbeker Rivo 350 ml' })
     await expect(rij).toContainText('DEMO-1001')
     await expect(rij).toContainText('midocean')
@@ -33,9 +36,9 @@ test.describe('producten', () => {
     await logIn(page)
     await page.goto('/producten')
 
-    await page.getByLabel('Producten zoeken').fill('balpen')
+    await page.getByLabel('Producten zoeken').fill('Balpen Metal')
     await page.getByRole('button', { name: 'Zoeken' }).click()
-    await expect(page.getByText('1 product gevonden voor “balpen”')).toBeVisible()
+    await expect(page.getByText('1 product gevonden voor “Balpen Metal”')).toBeVisible()
 
     await page.goto('/producten?search=DEMO-1003')
     await expect(page.locator('tbody tr')).toHaveCount(1)
@@ -46,20 +49,22 @@ test.describe('producten', () => {
     await logIn(page)
     await page.goto('/producten')
 
+    await page.goto('/producten?search=DEMO-100')
     await page.getByRole('link', { name: 'Inactief', exact: true }).click()
     await expect(page.getByText('Geen producten gevonden')).toBeVisible()
 
     await page.getByRole('link', { name: 'Actief', exact: true }).click()
-    await expect(page.locator('tbody tr').first()).toBeVisible()
+    await expect(page.locator('tbody tr')).toHaveCount(4)
   })
 
-  test('sorteert op artikelnummer', async ({ page }) => {
+  test('sorteert op artikelnummer, beide kanten op', async ({ page }) => {
     await logIn(page)
-    await page.goto('/producten')
+    // Op de demoproducten, zodat de uitslag niet afhangt van wat er verder
+    // in de catalogus staat.
+    await page.goto('/producten?search=DEMO-100')
 
     await page.getByRole('link', { name: 'Artikelnummer' }).click()
-    const eerste = page.locator('tbody tr').first()
-    await expect(eerste).toContainText('DEMO-1001')
+    await expect(page.locator('tbody tr').first()).toContainText('DEMO-1001')
 
     await page.getByRole('link', { name: /Artikelnummer/ }).click()
     await expect(page.locator('tbody tr').first()).toContainText('DEMO-1004')
@@ -67,7 +72,7 @@ test.describe('producten', () => {
 
   test('toont het detail met varianten, staffels en bedrukopties', async ({ page }) => {
     await logIn(page)
-    await page.goto('/producten')
+    await page.goto('/producten?search=DEMO-1001')
     await page.getByRole('link', { name: 'Thermosbeker Rivo 350 ml' }).click()
 
     await expect(page.getByRole('heading', { name: 'Thermosbeker Rivo 350 ml' })).toBeVisible()
