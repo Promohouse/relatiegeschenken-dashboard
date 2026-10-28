@@ -70,7 +70,7 @@ describe('gebruikersbeheer', () => {
     await prisma.unscoped.account.deleteMany({ where: { userId: { in: ids } } })
     await prisma.unscoped.session.deleteMany({ where: { userId: { in: ids } } })
     await prisma.unscoped.user.deleteMany({ where: { id: { in: ids } } })
-    await prisma.unscoped.role.deleteMany({ where: { id: { in: [beheerRol, kijkRol] } } })
+    await prisma.unscoped.role.deleteMany({ where: { key: { startsWith: tag } } })
     await app?.close()
   })
 
@@ -202,5 +202,124 @@ describe('gebruikersbeheer', () => {
     const res = await api().get(`/api/users?search=${tag}-collega`).set('Cookie', cookie).expect(200)
     expect(res.body.items).toHaveLength(1)
     expect(res.body.items[0].id).toBe(nieuweId)
+  })
+
+  describe('rollen bewerken', () => {
+    let eigenRol = ''
+
+    it('geeft alle rechten gegroepeerd per module', async () => {
+      const res = await api().get('/api/roles/permissions').set('Cookie', cookie).expect(200)
+
+      const modules = res.body.map((g: { module: string }) => g.module)
+      expect(modules).toContain('users')
+      expect(modules).toContain('customers')
+
+      const users = res.body.find((g: { module: string }) => g.module === 'users')
+      expect(users.permissions.map((p: { key: string }) => p.key)).toContain('users:update')
+      // Dagelijks werk staat voor beheer, zodat het scherm logisch leest.
+      expect(modules.indexOf('customers')).toBeLessThan(modules.indexOf('users'))
+    })
+
+    it('maakt een rol aan met gekozen rechten', async () => {
+      const res = await api()
+        .post('/api/roles').set('Cookie', cookie)
+        .send({
+          key: `${tag}-magazijn`,
+          name: 'Magazijn',
+          description: 'Mag leveringen afhandelen',
+          permissionKeys: ['users:view'],
+        })
+        .expect(201)
+
+      eigenRol = res.body.id
+      expect(res.body.permissions).toEqual(['users:view'])
+      expect(res.body.isSystem).toBe(false)
+      expect(res.body.userCount).toBe(0)
+    })
+
+    it('weigert een tweede rol met dezelfde sleutel', async () => {
+      const res = await api()
+        .post('/api/roles').set('Cookie', cookie)
+        .send({ key: `${tag}-magazijn`, name: 'Nog een magazijn' })
+        .expect(409)
+      expect(res.body.error.message).toContain('bestaat al')
+    })
+
+    it('weigert een sleutel met hoofdletters of spaties', async () => {
+      const res = await api()
+        .post('/api/roles').set('Cookie', cookie)
+        .send({ key: 'Mijn Rol', name: 'Fout' })
+        .expect(400)
+      expect(JSON.stringify(res.body.error.details)).toContain('kleine letters')
+    })
+
+    it('weigert een onbekend recht', async () => {
+      const res = await api()
+        .post('/api/roles').set('Cookie', cookie)
+        .send({ key: `${tag}-raar`, name: 'Raar', permissionKeys: ['bestaat:niet'] })
+        .expect(404)
+      expect(res.body.error.message).toContain('bestaat:niet')
+      expect(await prisma.unscoped.role.count({ where: { key: `${tag}-raar` } })).toBe(0)
+    })
+
+    it('wijzigt rechten en legt vast wat erbij kwam en wat eraf ging', async () => {
+      const res = await api()
+        .patch(`/api/roles/${eigenRol}`).set('Cookie', cookie)
+        .send({ name: 'Magazijn en expeditie', permissionKeys: ['users:view', 'users:create'] })
+        .expect(200)
+
+      expect(res.body.name).toBe('Magazijn en expeditie')
+      expect(res.body.permissions).toEqual(['users:create', 'users:view'])
+
+      const audit = await prisma.unscoped.auditLog.findFirstOrThrow({
+        where: { entity: 'Role', entityId: eigenRol, action: 'UPDATE' },
+        orderBy: { occurredAt: 'desc' },
+      })
+      const diff = audit.diff as Record<string, { van: unknown; naar: unknown }>
+      expect(diff.permissions.naar).toContain('users:create')
+    })
+
+    it('verwijdert een rol die van niemand is', async () => {
+      const los = await api()
+        .post('/api/roles').set('Cookie', cookie)
+        .send({ key: `${tag}-los`, name: 'Per ongeluk' }).expect(201)
+      await api().delete(`/api/roles/${los.body.id}`).set('Cookie', cookie).expect(204)
+      expect(await prisma.unscoped.role.count({ where: { id: los.body.id } })).toBe(0)
+    })
+
+    it('weigert een rol te verwijderen die iemand heeft', async () => {
+      await api().patch(`/api/users/${nieuweId}`).set('Cookie', cookie)
+        .send({ roleKeys: [`${tag}-magazijn`] }).expect(200)
+
+      const res = await api().delete(`/api/roles/${eigenRol}`).set('Cookie', cookie).expect(409)
+      expect(res.body.error.message).toContain('1 gebruiker')
+      expect(await prisma.unscoped.role.count({ where: { id: eigenRol } })).toBe(1)
+    })
+
+    it('weigert een systeemrol te verwijderen, maar laat de rechten wel wijzigen', async () => {
+      const systeem = await prisma.unscoped.role.create({
+        data: { key: `${tag}-systeem`, name: 'Systeemrol', isSystem: true },
+      })
+
+      const res = await api().delete(`/api/roles/${systeem.id}`).set('Cookie', cookie).expect(422)
+      expect(res.body.error.message).toContain('rechten wel aanpassen')
+
+      await api().patch(`/api/roles/${systeem.id}`).set('Cookie', cookie)
+        .send({ permissionKeys: ['users:view'] }).expect(200)
+    })
+
+    it('laat de laatste beheerrechten niet uit het systeem verdwijnen', async () => {
+      // Mijn eigen rol is de enige met users:update; die leeghalen zou
+      // betekenen dat niemand er meer bij kan.
+      const res = await api()
+        .patch(`/api/roles/${beheerRol}`).set('Cookie', cookie)
+        .send({ permissionKeys: ['users:view'] })
+        .expect(422)
+      expect(res.body.error.message).toContain('users:update')
+
+      // Teruggerold: de rol heeft zijn rechten nog.
+      const rol = await api().get(`/api/roles/${beheerRol}`).set('Cookie', cookie).expect(200)
+      expect(rol.body.permissions).toContain('users:update')
+    })
   })
 })

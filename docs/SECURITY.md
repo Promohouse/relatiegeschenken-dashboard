@@ -39,7 +39,17 @@ zonder code-release. Een gebruiker kan meerdere rollen hebben; de effectieve
 permissies worden per request bepaald.
 
 Interne rollen: beheerder, verkoop, orderbeheer, inkoop, administratie,
-klantbeheerder.
+klantbeheerder. Rollen en hun rechten zijn vanuit `/beheer/rollen` aan te
+passen. Systeemrollen zijn wel aanpasbaar maar niet te verwijderen, en een
+wijziging waarna niemand meer het recht `users:update` heeft wordt
+teruggerold: anders sluit de laatste beheerder zichzelf buiten.
+
+De seed zet nu voor alle veertien modules alle zes acties klaar, 84 rechten.
+Een deel daarvan is zinloos (`dashboard:approve`, `dashboard:delete`) en maakt
+het raster onnodig breed. Opschonen betekent rijen uit `permissions`
+verwijderen, dus dat gebeurt pas met expliciete toestemming - zie harde regel
+9. Zolang ze bestaan controleert de guard ze gewoon; ze zitten alleen in de
+weg bij het instellen.
 
 Klantrollen, met een scherpe scheiding:
 

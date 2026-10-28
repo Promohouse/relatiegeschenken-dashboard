@@ -54,8 +54,9 @@ test.describe('gebruikersbeheer', () => {
     await expect(
       page.locator('tr', { hasText: 'Demo Verkoop' }).getByText('Verkoop', { exact: true }),
     ).toBeVisible()
-    // En de rollen met hun aantal rechten staan eronder.
-    await expect(page.getByRole('heading', { name: 'Rollen en rechten' })).toBeVisible()
+    // De rechten zelf worden op de rollenpagina beheerd; hier staat de doorverwijzing.
+    await expect(page.getByText('7 rollen ingesteld.')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Rollen en rechten beheren' })).toBeVisible()
   })
 
   test('maakt een gebruiker aan met een rol', async ({ page }) => {

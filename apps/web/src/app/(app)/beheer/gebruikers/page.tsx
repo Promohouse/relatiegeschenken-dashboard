@@ -113,25 +113,12 @@ export default async function GebruikersPagina({
         </table>
       </div>
 
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold">Rollen en rechten</h2>
-        <p className="mt-1 mb-3 text-sm text-ink-soft">
-          Rechten staan als <code className="font-[family-name:var(--font-mono)] text-xs">module:actie</code> in
-          de database, dus ze zijn te wijzigen zonder nieuwe code. Het scherm om ze aan te passen
-          volgt nog.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {rollen.map((rol) => (
-            <div key={rol.key} className="rounded border border-rule bg-surface p-4">
-              <p className="text-sm font-medium">{rol.name}</p>
-              <p className="font-[family-name:var(--font-mono)] text-xs text-ink-faint">{rol.key}</p>
-              <p className="mt-2 text-xs text-ink-soft">
-                {rol.permissions.length} {rol.permissions.length === 1 ? 'recht' : 'rechten'}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <p className="mt-4 text-sm text-ink-soft">
+        {rollen.length} rollen ingesteld.{' '}
+        <Link href="/beheer/rollen" className="font-medium text-accent hover:underline">
+          Rollen en rechten beheren
+        </Link>
+      </p>
     </div>
   )
 }

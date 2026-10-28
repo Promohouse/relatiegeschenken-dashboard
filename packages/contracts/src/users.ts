@@ -76,3 +76,58 @@ export type UpdateUser = z.infer<typeof updateUserSchema>
 export type UserSummary = z.infer<typeof userSummarySchema>
 export type RoleSummary = z.infer<typeof roleSummarySchema>
 export type PaginatedUsers = z.infer<typeof paginatedUsersSchema>
+
+// --- Rollen bewerken -------------------------------------------------------
+
+/** Sleutels zijn kleine letters, cijfers en koppeltekens: ze staan in de code. */
+const rolSleutel = () =>
+  z
+    .string({ error: 'Vul een sleutel in' })
+    .trim()
+    .toLowerCase()
+    .min(2, 'Een sleutel is minstens 2 tekens')
+    .max(40)
+    .regex(/^[a-z][a-z0-9_-]*$/, 'Gebruik kleine letters, cijfers, - en _, beginnend met een letter')
+
+export const createRoleSchema = z.object({
+  key: rolSleutel(),
+  name: verplichteTekst('Vul een naam in', { min: 2, max: 80 }),
+  description: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v),
+    z.string().trim().max(300).nullable(),
+  ).optional(),
+  permissionKeys: z.array(z.string()).default([]),
+})
+
+export const updateRoleSchema = z.object({
+  name: verplichteTekst('Vul een naam in', { min: 2, max: 80 }).optional(),
+  description: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v),
+    z.string().trim().max(300).nullable(),
+  ).optional(),
+  permissionKeys: z.array(z.string()).optional(),
+})
+
+export const permissionSchema = z.object({
+  key: z.string(),
+  module: z.string(),
+  action: z.string(),
+  description: z.string().nullable(),
+})
+
+/** Rechten gegroepeerd per module, zoals het bewerkscherm ze toont. */
+export const permissionGroupSchema = z.object({
+  module: z.string(),
+  permissions: z.array(permissionSchema),
+})
+
+export const roleDetailSchema = roleSummarySchema.extend({
+  /** Hoeveel gebruikers deze rol hebben; bepaalt of hij te verwijderen is. */
+  userCount: z.number().int(),
+})
+
+export type CreateRole = z.infer<typeof createRoleSchema>
+export type UpdateRole = z.infer<typeof updateRoleSchema>
+export type Permission = z.infer<typeof permissionSchema>
+export type PermissionGroup = z.infer<typeof permissionGroupSchema>
+export type RoleDetail = z.infer<typeof roleDetailSchema>

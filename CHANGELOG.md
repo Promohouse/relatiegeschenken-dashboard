@@ -6,6 +6,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Rollen bewerken vanuit het scherm: een raster van module tegen actie, met
+  per module een "alles aan/uit", en een teller die zegt hoeveel van de 84
+  rechten aanstaan. Daarmee is "rechten configureerbaar zonder nieuwe versie
+  van de software" ook echt waar in de interface. De sleutel van een rol ligt
+  vast zodra hij bestaat, want hij staat in de code. Systeemrollen zijn wel
+  aan te passen maar niet te verwijderen, een rol die aan iemand is toegekend
+  kan niet weg, en een wijziging waarna niemand meer gebruikers kan beheren
+  wordt teruggerold. Het auditlog vermeldt per wijziging welke rechten erbij
+  kwamen en welke eraf gingen. 120 api-tests, 37 e2e-tests.
 - Gebruikersbeheer: aanmaken met een beginwachtwoord en rollen, wijzigen, op
   inactief zetten, en een overzicht van de rollen met hun aantal rechten.
 - **Zelfregistratie geblokkeerd.** De registratieroute van better-auth stond

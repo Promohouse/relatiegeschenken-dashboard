@@ -47,7 +47,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | Klanten aanmaken en wijzigen | formulier met foutmeldingen bij het veld zelf, op inactief zetten met bevestiging, knoppen alleen zichtbaar met het juiste recht |
 | ◻ | Betalingsvoorwaarden en klantprijzen | een klantprijs gaat voor op de algemene prijsregel, aangetoond met een test |
 | ✅ | Gebruikersbeheer | aanmaken met beginwachtwoord en rollen, wijzigen, op inactief zetten; zelfregistratie geblokkeerd; niemand kan zichzelf of iedereen buitensluiten |
-| ◻ | Rollen bewerken | rechten per module en actie aanpasbaar in het scherm; de gegevens staan er al, het scherm nog niet |
+| ✅ | Rollen bewerken | rechten per module en actie aanpasbaar in een raster, met "alles aan/uit" per module; systeemrollen wel aanpasbaar, niet verwijderbaar; een rol die iemand heeft kan niet weg |
 | ◻ | Klantgebruikers met klantrollen | alleen een goedkeurder kan goedkeuren; test op de andere rollen |
 
 ## Fase 2 — Productbeheer
