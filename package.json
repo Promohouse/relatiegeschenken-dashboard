@@ -15,7 +15,8 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck -w @rgh/api && npm run typecheck -w @rgh/web",
     "api:dev": "npm run dev -w @rgh/api",
-    "web:dev": "npm run dev -w @rgh/web"
+    "web:dev": "npm run dev -w @rgh/web",
+    "test:e2e": "npm run test:e2e -w @rgh/web"
   },
   "engines": {
     "node": ">=22"

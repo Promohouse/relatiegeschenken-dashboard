@@ -156,9 +156,24 @@ Validatie en OpenAPI komen uit Zod, niet uit class-validator. Zie ADR-0011.
 npm run db:seed        # basisgegevens, demodata en demo-accounts met wachtwoord
 npm run api:dev        # api met herstart bij wijzigingen, op poort 3101
 npm run web:dev        # dashboard op poort 3100 (heeft de api nodig)
+npm run test:e2e       # Playwright: echte browser tegen de draaiende applicatie
 npm test               # alle workspaces
 npm run typecheck      # packages en api
 ```
+
+## Twee soorten tests
+
+`npm test` dekt de onderdelen: domeinlogica, database en api, tegen
+`relatiegeschenken_test`. Snel, en draait overal.
+
+`npm run test:e2e` dekt of ze samen werken: een echte browser tegen de
+draaiende applicatie. Die gebruikt de **ontwikkeldatabase** en de
+demo-accounts, dus draai eerst `npm run db:seed`. Playwright start api en
+dashboard zelf als ze nog niet draaien.
+
+Let op bij het schrijven van e2e-tests: Next voegt een onzichtbaar
+`role="alert"`-element toe voor schermlezers, dus `getByRole('alert')` is
+dubbelzinnig. Selecteer op de tekst die de gebruiker echt ziet.
 
 ## Beveiliging: twee dingen die je moet weten
 

@@ -37,6 +37,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 
 | | Taak | Acceptatiecriterium |
 |---|---|---|
+| ✅ | End-to-end-tests op inloggen en klanten | 10 Playwright-tests in een echte browser: inloggen via het formulier, verkeerd wachtwoord, doorsturen en terugkeren, zoeken, filteren, sorteren, uitloggen |
 | ✅ | Basislayout, zijbalk, inlogscherm | gereed: vaste zijbalk die onderscheid maakt tussen gebouwd en in aanbouw, inlogscherm, demowaarschuwing, uitloggen |
 | ✅ | Klanten-API | zoeken op naam, nummer, e-mail, btw-nummer en contactpersoon; filteren, sorteren, pagineren; aanmaken met uitgegeven klantnummer; wijzigen met auditverschil; op inactief zetten in plaats van verwijderen |
 | ✅ | Klantenoverzicht (scherm) | gereed: zoeken, filteren op actief, sorteren per kolom, pagineren. Werkt zonder JavaScript, want het zijn gewone links en een formulier |
