@@ -201,8 +201,16 @@ model User {
   email       String    @unique
   name        String
   isActive    Boolean   @default(true)
-  mfaEnabled  Boolean   @default(false)
   lastLoginAt DateTime?
+
+  // --- Velden van better-auth (ADR-0012) ---
+  // better-auth adresseert via de Prisma-adapter dit model rechtstreeks, dus
+  // er is één gebruikerstabel in plaats van twee die synchroon moeten blijven.
+  // Deze namen liggen vast door de bibliotheek.
+  emailVerified    Boolean  @default(false)
+  image            String?
+  /// Vervangt het eerdere mfaEnabled: één vlag, beheerd door de tweefactor-plugin.
+  twoFactorEnabled Boolean? @default(false)
 
   /// Gevuld bij een klantgebruiker (portaal). Leeg bij een interne medewerker.
   /// De Prisma-extensie dwingt af dat portaalsessies alleen eigen data zien.
@@ -229,6 +237,10 @@ model User {
   ownedQuotes          Quote[]         @relation("QuoteOwner")
   createdQuoteVersions QuoteVersion[]
   quoteApprovals       QuoteApproval[]
+
+  sessions   Session[]
+  accounts   Account[]
+  twoFactors TwoFactor[]
 
   @@index([customerId])
   @@map("users")
@@ -2180,4 +2192,83 @@ model ShipmentItem {
   @@unique([shipmentId, orderLineId])
   @@index([orderLineId])
   @@map("shipment_items")
+}
+
+// --- Authenticatie (better-auth, ADR-0012) ---------------------------------
+// Vorm en veldnamen liggen vast door de bibliotheek; gecontroleerd met
+// `better-auth generate`. Alleen de tabelnamen en het UUID-type op userId zijn
+// van ons, zodat ze aansluiten op de rest van het schema.
+
+model Session {
+  id        String   @id
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+/// Draagt de wachtwoordhash voor e-mail-en-wachtwoord, en later de gegevens
+/// van een externe aanbieder.
+model Account {
+  id         String @id
+  accountId  String
+  providerId String
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+/// Kortlevende codes: e-mailverificatie, wachtwoordherstel.
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("auth_verifications")
+}
+
+/// TOTP-geheim en herstelcodes. `lockedUntil` remt brute force op de code af.
+model TwoFactor {
+  id          String @id
+  secret      String
+  backupCodes String
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  verified                Boolean?  @default(true)
+  failedVerificationCount Int?      @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("auth_two_factors")
 }

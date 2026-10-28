@@ -6,6 +6,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Authenticatie met better-auth 1.7.14 (ADR-0012): registreren, inloggen,
+  sessiecookie en de tweefactor-plugin, op onze eigen users-tabel in plaats
+  van een tweede gebruikersadministratie.
+- Rechten-guard op `module:actie` die dichtslaat bij een route zonder
+  declaratie, en klantisolatie die standaard aanstaat: tijdens een
+  portaalsessie begrenst elke query zich op de eigen klant, ook bij een
+  zoekopdracht op id. 211 tests.
 - Prijsengine: van inkoopstaffel naar verkoopprijs, met regels op klant,
   product, kanaal, categorie, leverancier of algemeen. `priority` bepaalt wat
   wint; zonder toepasselijke regel wordt er geen prijs bepaald in plaats van

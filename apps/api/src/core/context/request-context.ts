@@ -39,6 +39,18 @@ export const RequestContext = {
   },
 
   /**
+   * Vult de ingelogde gebruiker in. Wordt door de sessie-guard gedaan nadat de
+   * sessie is vastgesteld; de middleware kent die op dat moment nog niet.
+   */
+  setUser(user: { userId: string | null; customerId: string | null }): void {
+    const store = storage.getStore()
+    if (store) {
+      store.userId = user.userId
+      store.customerId = user.customerId
+    }
+  },
+
+  /**
    * Vult de context in voor werk buiten een verzoek om, zoals een worker.
    * Maakt in het auditlog zichtbaar dat de handeling van het systeem kwam.
    */

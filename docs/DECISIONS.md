@@ -18,6 +18,8 @@ nieuwe die de oude vervangt.
 | [0008](architecture/0008-nestjs-als-backendframework.md) | NestJS blijft de backend | besloten 2026-10-28 |
 | [0009](architecture/0009-achtergrondtaken-bullmq-valkey.md) | BullMQ op Valkey; outbox blijft in PostgreSQL | besloten 2026-10-28, vervangt pg-boss |
 | [0010](architecture/0010-deployment-decorsign-k3s-argocd.md) | Deployment op Decorsign K3s via ArgoCD, GitOps, twee namespaces | besloten 2026-10-28; drie punten bij Decorsign open |
+| [0011](architecture/0011-validatie-en-openapi-uit-zod.md) | Zod als enige bron voor validatie, types en documentatie | besloten 2026-10-28 |
+| [0012](architecture/0012-authenticatie-better-auth.md) | better-auth voor identiteit, autorisatie en klantisolatie zelf | besloten 2026-10-28 |
 
 ## 1b. Bevestigd op 2026-10-28
 
@@ -124,7 +126,13 @@ Advies: BullMQ met Redis. Gevolg: lokaal moet Redis erbij (Homebrew of Docker).
 gebeurtenis moet in dezelfde transactie als de statuswijziging worden
 weggeschreven, en dat kan een externe wachtrij per definitie niet.
 
-### D-04 — Definitieve auth-bibliotheek
+### D-04 — Definitieve auth-bibliotheek — **BESLOTEN 2026-10-28: better-auth**
+
+Vastgelegd in [ADR-0012](architecture/0012-authenticatie-better-auth.md), met
+de afweging tegen Lucia (beëindigd), Auth.js (alleen nog patches) en de
+dienst-gebaseerde opties.
+
+#### Oorspronkelijke formulering
 
 ADR-0003 koos het soort oplossing, niet het pakket. Voor implementatie
 verifieer ik eerst de actuele NestJS-integratie, MFA-ondersteuning en

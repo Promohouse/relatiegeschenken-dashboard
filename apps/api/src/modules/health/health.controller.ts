@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common'
+import { Public } from '../../core/auth/auth.decorators'
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { AppConfig } from '../../core/config/config.service'
 import { PrismaService } from '../../core/prisma/prisma.service'
@@ -20,6 +21,7 @@ export class HealthController {
   ) {}
 
   @Get()
+  @Public()
   @ApiOperation({
     summary: 'Gezondheid van de applicatie',
     description:

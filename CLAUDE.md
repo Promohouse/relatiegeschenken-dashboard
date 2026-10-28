@@ -158,6 +158,18 @@ npm test               # alle workspaces
 npm run typecheck      # packages en api
 ```
 
+## Beveiliging: twee dingen die je moet weten
+
+**Elke route declareert zijn toegang.** `@Public()` of
+`@RequirePermission('module:actie')`. Een route zonder een van beide wordt
+geweigerd met een melding die dat zegt - beveiliging vergeten moet opvallen.
+
+**Gebruik `prisma.db`, niet `prisma.unscoped`.** Tijdens een portaalsessie
+begrenst `db` elke query automatisch op de eigen klant. `unscoped` omzeilt dat
+en heet zo opdat het opvalt bij het nalezen. Draagt een nieuw model
+klantgegevens, zet het dan in de lijst in `core/prisma/customer-scope.ts`;
+ontbreken daar is een lek. Zie ADR-0012.
+
 ## Prisma heeft zijn eigen Decimal
 
 `packages/contracts` rekent met `decimal.js`, Prisma levert zijn eigen

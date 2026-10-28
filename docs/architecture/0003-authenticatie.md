@@ -1,7 +1,7 @@
 # ADR-0003 - Authenticatie via een onderhouden TypeScript-bibliotheek
 
 - Datum: 2026-10-08
-- Status: geaccepteerd, implementatiekeuze nog te verifieren
+- Status: geaccepteerd; de pakketkeuze is ingevuld door ADR-0012
 
 ## Context
 

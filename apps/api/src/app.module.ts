@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common'
 import { AppConfigModule } from './core/config/config.module'
+import { AuthModule } from './core/auth/auth.module'
 import { CoreModule } from './core/core.module'
 import { RequestContextMiddleware } from './core/context/request-context.middleware'
 import { PrismaModule } from './core/prisma/prisma.module'
@@ -11,7 +12,7 @@ import { HealthModule } from './modules/health/health.module'
  * geexporteerde service.
  */
 @Module({
-  imports: [AppConfigModule, PrismaModule, CoreModule, HealthModule],
+  imports: [AppConfigModule, PrismaModule, AuthModule, CoreModule, HealthModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -5,7 +5,9 @@ import { AppModule } from './app.module'
 import { configureApp } from './configure-app'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true })
+  // bodyParser uit: better-auth moet de ruwe body krijgen. configureApp zet de
+  // parser er daarna alsnog voor onze eigen routes.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false })
   const config = configureApp(app)
 
   await app.listen(config.env.API_PORT)

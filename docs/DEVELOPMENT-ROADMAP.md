@@ -25,9 +25,9 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | API-fundament NestJS (3a) | gereed: omgevingsvalidatie met veiligheidsslot, domeinfouten en één foutvorm, Prisma-service, healthcheck, OpenAPI uit Zod op `/docs`; 28 tests |
 | ✅ | API-fundament (3b) | gereed: verzoekcontext, auditlogging, nummeruitgifte en prijsengine achter services; 190 tests |
 | ✅ | Nummerreeksen en prijsengine achter services | gereed: uitgifte onder rij-lock, teller instelbaar maar nooit omlaag; prijsengine kiest staffel en regel en weigert een prijs zonder regel |
-| ◻ | Authenticatie en MFA (D-04) | inloggen, sessie, MFA, wachtwoordherstel; tests die **weigering** aantonen |
-| ◻ | Rechten-guard | elk endpoint heeft een permissie; een test per module die 403 verwacht |
-| ◻ | Klantscope-extensie | portaalquery zonder `customerId`-filter weigert; test met vreemd id verwacht 404 |
+| ✅ | Authenticatie en MFA (ADR-0012) | gereed: better-auth op onze eigen users-tabel, registreren, inloggen, sessiecookie, tweefactor-plugin. Wachtwoordherstel per e-mail wacht op Fase 7 |
+| ✅ | Rechten-guard | gereed: sluit dicht bij een route zonder declaratie; getest op 401, 403 en het verschil dat een rol maakt |
+| ✅ | Klantscope-extensie | gereed en veilig als standaard: een vreemd id levert niets op, ook niet via findUnique; 10 tests |
 | ◻ | Jobqueue: BullMQ op Valkey (ADR-0009) | een taak met retry en dead-letter, zichtbaar en herstartbaar; Valkey draait lokaal |
 | ◻ | Storage-adapter | upload, download, controlewaarde, versie; lokale schijf werkend |
 | ⏸ | Docker Compose lokaal | wacht op Docker op de machine |

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "dotenv -e ../../.env -- node --watch-path=./src -r @swc-node/register src/main.ts",
     "start": "dotenv -e ../../.env -- node -r @swc-node/register src/main.ts",
-    "test": "vitest run",
+    "test": "node ../../scripts/prepare-test-db.mjs && vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -16,11 +16,13 @@
     "@nestjs/swagger": "12.0.5",
     "@rgh/contracts": "*",
     "@rgh/db": "*",
+    "better-auth": "^1.7.14",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@better-auth/cli": "^1.4.22",
     "@nestjs/testing": "^12.3.2",
     "@swc-node/register": "^1.12.1",
     "@swc/core": "^1.16.20",

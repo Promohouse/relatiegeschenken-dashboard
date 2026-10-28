@@ -12,8 +12,10 @@ process.env.NODE_ENV = 'test'
 const { AppModule } = await import('../src/app.module')
 const { configureApp } = await import('../src/configure-app')
 const { ConflictError, NotFoundError } = await import('../src/core/errors/domain-errors')
+const { Public } = await import('../src/core/auth/auth.decorators')
 
 /** Alleen voor deze test: endpoints die een fout gooien, om de vertaling te zien. */
+@Public()
 @Controller('test-fouten')
 class FoutController {
   @Get('niet-gevonden')
@@ -48,7 +50,7 @@ describe('api-fundament', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [TestModule] }).compile()
-    app = moduleRef.createNestApplication()
+    app = moduleRef.createNestApplication({ bodyParser: false })
     configureApp(app)
     await app.init()
   }, 30000)

@@ -55,9 +55,14 @@ vastgelegd met gebruiker, tijdstip, factuurversie en auditregistratie.
 Een klant mag nooit gegevens van een andere klant zien, ook niet door een URL
 of een id aan te passen. Drie lagen, want één is te weinig:
 
-1. **Prisma-extensie** die voor een portaalsessie een `customerId`-filter
-   verplicht maakt op elk model dat klantgebonden is. Ontbreekt het filter,
-   dan weigert de query — een fout wordt een uitzondering, geen datalek.
+1. **Prisma-extensie** die voor een portaalsessie elke query begrenst op de
+   eigen klant — **gebouwd en getest**. `PrismaService.db` geeft tijdens een
+   portaalsessie automatisch de begrensde client, dus een module die er niet
+   aan denkt lekt niet. `findUnique` wordt omgezet naar `findFirst`, want
+   anders zou het filter bij een zoekopdracht op id genegeerd worden: precies
+   het gat waardoor een aangepast id gegevens van een ander zou opleveren.
+   `PrismaService.unscoped` is de bewuste uitweg, met die naam zodat het
+   opvalt bij het nalezen van code.
 2. **Expliciete controle in de service** bij elke toegang via een id: hoort
    dit record bij de klant van de sessie?
 3. **Tests die weigering aantonen**, niet alleen succes. Voor elk
