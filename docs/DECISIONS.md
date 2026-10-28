@@ -155,6 +155,25 @@ dezelfde route die ik toen als eerste connector adviseerde: bestandsimport
 werkt vandaag, zonder credentials, en blijft de oplossing voor Clipper en
 Toppoint. Geen nieuw besluit nodig, wel een verschuiving in de planning.
 
+### D-11 — Voorrang tussen prijsregels *(aanname, graag bevestigen)*
+
+De prijsengine kiest welke regel geldt. **`priority` is de knop**: de laagste
+waarde wint, en dat is expliciet instelbaar per regel. Specificiteit is
+alleen de tiebreaker als twee regels dezelfde priority hebben, met deze
+standaardvolgorde:
+
+`CUSTOMER` > `PRODUCT` > `CHANNEL` > `CATEGORY` > `SUPPLIER` > `GLOBAL`
+
+De aanname die bevestigd moet worden: **een klantafspraak gaat voor op een
+algemene productregel**, omdat een klantafspraak een commerciële toezegging
+is. Wie dat anders wil, hoeft geen code te wijzigen - dan krijgt de
+productregel een lagere priority.
+
+Tweede regel die vastligt: **zonder toepasselijke prijsregel wordt er geen
+prijs bepaald.** De engine geeft een fout in plaats van terug te vallen op de
+inkoopprijs, want dat zou betekenen dat er zonder marge verkocht wordt zonder
+dat iemand het merkt.
+
 ### D-07 — Mailbox en Graph-permissies
 
 Welke mailboxen zijn beschikbaar en welke Microsoft Graph-permissies mogen

@@ -6,6 +6,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
 ## [Niet uitgebracht]
 
 ### Toegevoegd
+- Prijsengine: van inkoopstaffel naar verkoopprijs, met regels op klant,
+  product, kanaal, categorie, leverancier of algemeen. `priority` bepaalt wat
+  wint; zonder toepasselijke regel wordt er geen prijs bepaald in plaats van
+  teruggevallen op de inkoopprijs (D-11).
+- Nummeruitgifte achter een service: uitgifte onder rij-lock, vooruitkijken
+  zonder verbruiken, teller en formaat instelbaar maar nooit omlaag.
+- Verzoekcontext en auditlogging: wie deed wat vanaf welk adres, met een
+  verschil-helper die alleen gewijzigde velden bewaart. Een hapering in het
+  logboek laat de handeling zelf nooit mislukken.
 - API-fundament in NestJS (`apps/api`): omgevingsvalidatie die bij het
   opstarten faalt met een leesbare melding en het databasevoorvoegsel
   afdwingt, domeinfouten met één uniforme foutvorm, Prisma-service,

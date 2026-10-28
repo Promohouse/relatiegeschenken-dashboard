@@ -23,8 +23,8 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ✅ | `shipments` en `shipment_items` | gereed: deelzendingen, meerdere adressen, tracking, pakbon; afleidlogica in contracts; 8 tests plus 13 op de logica |
 | ✅ | `print_positions` als entiteit | gereed: verplichte verwijzing vanuit bedrukopties, oorspronkelijke leveranciersbenaming bewaard, vastgezette offerteversies ongemoeid |
 | ✅ | API-fundament NestJS (3a) | gereed: omgevingsvalidatie met veiligheidsslot, domeinfouten en één foutvorm, Prisma-service, healthcheck, OpenAPI uit Zod op `/docs`; 28 tests |
-| ◻ | API-fundament (3b) | auditlog-interceptor, verzoekcontext, nummeruitgifte en prijsengine achter services |
-| ◻ | Nummerreeksen en prijsengine achter services | nummeruitgifte onder lock via de service; prijsengine lost `price_rules` op naar een verkoopprijs, met tests |
+| ✅ | API-fundament (3b) | gereed: verzoekcontext, auditlogging, nummeruitgifte en prijsengine achter services; 190 tests |
+| ✅ | Nummerreeksen en prijsengine achter services | gereed: uitgifte onder rij-lock, teller instelbaar maar nooit omlaag; prijsengine kiest staffel en regel en weigert een prijs zonder regel |
 | ◻ | Authenticatie en MFA (D-04) | inloggen, sessie, MFA, wachtwoordherstel; tests die **weigering** aantonen |
 | ◻ | Rechten-guard | elk endpoint heeft een permissie; een test per module die 403 verwacht |
 | ◻ | Klantscope-extensie | portaalquery zonder `customerId`-filter weigert; test met vreemd id verwacht 404 |

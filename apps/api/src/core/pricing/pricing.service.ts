@@ -1,0 +1,158 @@
+import { Injectable } from '@nestjs/common'
+import {
+  applicableRules, calculateUnitSalePrice, selectTier,
+  type PriceContext, type PriceRule, type PriceResult,
+} from '@rgh/contracts'
+import { PrismaService } from '../prisma/prisma.service'
+import { NotFoundError, PreconditionError } from '../errors/domain-errors'
+
+export interface PriceRequest {
+  productId: string
+  quantity: number
+  /** Klant waarvoor geprijsd wordt; laat klantafspraken meetellen. */
+  customerId?: string | null
+  /** Kanaal: eigen webshop, klantomgeving of partner. */
+  channelId?: string | null
+  /** Dwingt een bepaalde leverancier af; anders de voorkeursleverancier. */
+  productSupplierId?: string | null
+  /** Peildatum, voor een prijs zoals die op een moment in het verleden gold. */
+  at?: Date
+}
+
+export interface PriceBreakdown extends PriceResult {
+  productId: string
+  quantity: number
+  supplierId: string | null
+  supplierName: string | null
+  /** De inkoopstaffel die bij dit aantal hoort, als die er is. */
+  tierMinQuantity: number | null
+  /** Alle regels die golden, op volgorde. Maakt navraagbaar waarom deze prijs. */
+  consideredRuleIds: string[]
+}
+
+/**
+ * De prijsengine. Haalt de gegevens op en laat het rekenwerk over aan
+ * `packages/contracts`, zodat de frontend, de webshop en de partnerfeeds met
+ * exact dezelfde functie rekenen (ADR-0005).
+ */
+@Injectable()
+export class PricingService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async resolveUnitPrice(request: PriceRequest): Promise<PriceBreakdown> {
+    if (!Number.isInteger(request.quantity) || request.quantity < 1) {
+      throw new PreconditionError('Het aantal moet een geheel getal groter dan nul zijn.')
+    }
+
+    const product = await this.prisma.db.product.findUnique({
+      where: { id: request.productId },
+      select: {
+        id: true,
+        name: true,
+        categoryId: true,
+        suppliers: {
+          where: request.productSupplierId ? { id: request.productSupplierId } : { isActive: true },
+          orderBy: [{ isPreferred: 'desc' }, { purchasePrice: 'asc' }],
+          take: 1,
+          select: {
+            id: true,
+            supplierId: true,
+            purchasePrice: true,
+            supplier: { select: { name: true } },
+            purchaseTiers: { select: { minQuantity: true, unitPrice: true } },
+          },
+        },
+      },
+    })
+
+    if (!product) throw new NotFoundError(`Product ${request.productId} bestaat niet.`)
+
+    const leverancier = product.suppliers[0]
+    if (!leverancier) {
+      throw new PreconditionError(
+        `Voor "${product.name}" is geen actieve leverancier ingesteld, dus is er geen inkoopprijs.`,
+      )
+    }
+
+    // Staffel bepaalt de inkoopprijs; zonder passende staffel de basisprijs.
+    const staffel = selectTier(
+      leverancier.purchaseTiers.map((t) => ({
+        minQuantity: t.minQuantity,
+        unitPrice: t.unitPrice.toString(),
+      })),
+      request.quantity,
+    )
+    const inkoopprijs = staffel?.unitPrice ?? leverancier.purchasePrice.toString()
+
+    const context: PriceContext = {
+      productId: product.id,
+      categoryId: product.categoryId,
+      supplierId: leverancier.supplierId,
+      customerId: request.customerId ?? null,
+      channelId: request.channelId ?? null,
+      quantity: request.quantity,
+      at: request.at,
+    }
+
+    const regels = await this.laadRegels(context)
+    const uitkomst = calculateUnitSalePrice(inkoopprijs, regels, context)
+
+    if (!uitkomst) {
+      throw new PreconditionError(
+        `Er is geen prijsregel die geldt voor "${product.name}" bij ${request.quantity} stuks. ` +
+          'Zonder regel wordt er geen prijs bepaald, want terugvallen op de inkoopprijs zou ' +
+          'betekenen dat er zonder marge verkocht wordt.',
+      )
+    }
+
+    return {
+      ...uitkomst,
+      productId: product.id,
+      quantity: request.quantity,
+      supplierId: leverancier.supplierId,
+      supplierName: leverancier.supplier.name,
+      tierMinQuantity: staffel?.minQuantity ?? null,
+      consideredRuleIds: applicableRules(regels, context).map((r) => r.id),
+    }
+  }
+
+  /**
+   * Haalt ruim op en filtert fijn in de domeinlogica: de database selecteert
+   * wat mogelijk van toepassing is, de gedeelde functie beslist wat geldt.
+   */
+  private async laadRegels(context: PriceContext): Promise<PriceRule[]> {
+    const rijen = await this.prisma.db.priceRule.findMany({
+      where: {
+        isActive: true,
+        minQuantity: { lte: context.quantity },
+        OR: [
+          { scope: 'GLOBAL' },
+          { scope: 'PRODUCT', productId: context.productId },
+          ...(context.categoryId ? [{ scope: 'CATEGORY' as const, categoryId: context.categoryId }] : []),
+          ...(context.supplierId ? [{ scope: 'SUPPLIER' as const, supplierId: context.supplierId }] : []),
+          ...(context.customerId ? [{ scope: 'CUSTOMER' as const, customerId: context.customerId }] : []),
+          ...(context.channelId ? [{ scope: 'CHANNEL' as const, channelId: context.channelId }] : []),
+        ],
+      },
+    })
+
+    // Prisma heeft zijn eigen Decimal; via tekst omzetten voorkomt dat twee
+    // decimal-implementaties door elkaar lopen.
+    return rijen.map((r) => ({
+      id: r.id,
+      scope: r.scope,
+      supplierId: r.supplierId,
+      categoryId: r.categoryId,
+      productId: r.productId,
+      customerId: r.customerId,
+      channelId: r.channelId,
+      minQuantity: r.minQuantity,
+      marginPercent: r.marginPercent?.toString() ?? null,
+      markupAmount: r.markupAmount?.toString() ?? null,
+      priority: r.priority,
+      validFrom: r.validFrom,
+      validTo: r.validTo,
+      isActive: r.isActive,
+    }))
+  }
+}

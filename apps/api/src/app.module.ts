@@ -1,5 +1,7 @@
-import { Module } from '@nestjs/common'
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common'
 import { AppConfigModule } from './core/config/config.module'
+import { CoreModule } from './core/core.module'
+import { RequestContextMiddleware } from './core/context/request-context.middleware'
 import { PrismaModule } from './core/prisma/prisma.module'
 import { HealthModule } from './modules/health/health.module'
 
@@ -9,6 +11,11 @@ import { HealthModule } from './modules/health/health.module'
  * geexporteerde service.
  */
 @Module({
-  imports: [AppConfigModule, PrismaModule, HealthModule],
+  imports: [AppConfigModule, PrismaModule, CoreModule, HealthModule],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // Op alle routes: zonder verzoekcontext weet het auditlog niet wie wat deed.
+    consumer.apply(RequestContextMiddleware).forRoutes('*splat')
+  }
+}

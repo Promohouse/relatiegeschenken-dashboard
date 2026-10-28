@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common'
 import type { Request, Response } from 'express'
 import { randomUUID } from 'node:crypto'
+import { RequestContext } from '../context/request-context'
 import { mapError } from './error-mapping'
 
 /**
@@ -18,7 +19,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp()
     const response = ctx.getResponse<Response>()
     const request = ctx.getRequest<Request>()
-    const requestId = (request.headers['x-request-id'] as string) || randomUUID()
+    // Dezelfde id als in het auditlog en in de responsheader.
+    const requestId =
+      RequestContext.requestId() ?? (request.headers['x-request-id'] as string) ?? randomUUID()
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus()

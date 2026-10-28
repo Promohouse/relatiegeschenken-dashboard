@@ -59,8 +59,9 @@ describe('kanalen en partners', () => {
   it('kiest de prijsregel met de laagste priority binnen de geldigheidsperiode', async () => {
     const nu = new Date()
     await db.priceRule.createMany({
+      // Bewust geen GLOBAL-regel: die zou andere testbestanden raken, want die
+      // draaien parallel tegen dezelfde testdatabase.
       data: [
-        { scope: 'GLOBAL', marginPercent: '100.00', priority: 100 },
         { scope: 'PRODUCT', productId, marginPercent: '140.00', priority: 10, validFrom: new Date(nu.getTime() - 86400000) },
         { scope: 'PRODUCT', productId, marginPercent: '160.00', priority: 5, validFrom: new Date(nu.getTime() + 30 * 86400000) },
       ],
@@ -80,7 +81,6 @@ describe('kanalen en partners', () => {
     expect(actief[0].marginPercent?.toString()).toBe('140')
 
     await db.priceRule.deleteMany({ where: { productId } })
-    await db.priceRule.deleteMany({ where: { scope: 'GLOBAL', priority: 100, marginPercent: '100.00' } })
   })
 
   it('bewaart van een API-sleutel alleen de hash', async () => {

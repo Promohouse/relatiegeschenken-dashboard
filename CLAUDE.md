@@ -158,6 +158,13 @@ npm test               # alle workspaces
 npm run typecheck      # packages en api
 ```
 
+## Prisma heeft zijn eigen Decimal
+
+`packages/contracts` rekent met `decimal.js`, Prisma levert zijn eigen
+Decimal-implementatie. Zet een Prisma-Decimal daarom met `.toString()` om
+voordat je hem aan de domeinlogica geeft; twee decimal-bibliotheken door
+elkaar levert stille fouten op.
+
 ## Offertes zijn onveranderlijk
 
 Een offerteversie met `lockedAt` is door databasetriggers beschermd: wijzigen,
