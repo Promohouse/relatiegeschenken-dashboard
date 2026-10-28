@@ -17,6 +17,7 @@ nieuwe die de oude vervangt.
 | [0007](architecture/0007-offertemodel-splitsen.md) | Offertes als eigen aggregaat met onveranderlijke versies | besloten 2026-10-28 |
 | [0008](architecture/0008-nestjs-als-backendframework.md) | NestJS blijft de backend | besloten 2026-10-28 |
 | [0009](architecture/0009-achtergrondtaken-bullmq-valkey.md) | BullMQ op Valkey; outbox blijft in PostgreSQL | besloten 2026-10-28, vervangt pg-boss |
+| [0010](architecture/0010-deployment-decorsign-k3s-argocd.md) | Deployment op Decorsign K3s via ArgoCD, GitOps, twee namespaces | besloten 2026-10-28; drie punten bij Decorsign open |
 
 ## 2. Wat de masterprompt verandert
 
@@ -117,13 +118,20 @@ verifieer ik eerst de actuele NestJS-integratie, MFA-ondersteuning en
 onderhoudsstatus, en leg de keuze vast in een nieuwe ADR. Nog geen besluit
 gevraagd; wel een waarschuwing dat dit vóór Fase 1 moet.
 
-### D-05 — Hostingpartij en Kubernetes *(blokkeert infrastructuur)*
+### D-05 — Hostingpartij en Kubernetes — **grotendeels BEANTWOORD 2026-10-28**
 
-Twaalf vragen staan in [DEPLOYMENT.md §2](DEPLOYMENT.md). Zonder antwoorden
-kan ik geen providerafhankelijke infrastructuur ontwerpen zonder te gokken.
-De belangrijkste: welke host, beheerde Kubernetes of zelf, twee clusters of
-één, beheerde PostgreSQL en Redis, S3-opslag, registry, en of GitHub gebruikt
-wordt.
+Decorsign, K3s, ArgoCD, één cluster, zelf gedraaide PostgreSQL, GitHub.
+Vastgelegd in [ADR-0010](architecture/0010-deployment-decorsign-k3s-argocd.md).
+
+Nog open, en nu bij **Decorsign** in plaats van bij de opdrachtgever: Helm of
+Kustomize, mogen wij eigen StatefulSets en volumes aanmaken, een eigen
+PostgreSQL per omgeving, back-up en PITR, registry, ingress en TLS, DNS,
+monitoring, secretvoorziening en uitgaande mail. De tien vragen staan in
+[DEPLOYMENT.md §2](DEPLOYMENT.md).
+
+**Twee risico's die aandacht vragen:** dev en productie delen in het bestaande
+project één PostgreSQL-instantie, en er is geen aantoonbare back-up- of
+PITR-strategie. Zie ADR-0010 R1 en R2.
 
 ### D-06 — Importvolgorde *(advies: bestandsimport eerst)*
 

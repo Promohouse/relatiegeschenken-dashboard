@@ -25,31 +25,48 @@ Zodra Docker beschikbaar is komt er een `docker compose` voor lokale
 ontwikkeling met PostgreSQL, Redis, MinIO (S3-compatibel) en Mailpit
 (testmailbox). Die bestanden zijn er nog niet.
 
-## 2. Wat ik van de hostingpartij moet weten
+## 2. De hostingomgeving
 
-Zonder deze antwoorden kan ik geen providerafhankelijke infrastructuur
-ontwerpen zonder te gaan gokken, en dat doe ik niet.
+Vastgesteld op 2026-10-28, uitgewerkt in
+[ADR-0010](architecture/0010-deployment-decorsign-k3s-argocd.md).
 
-1. **Welke hostingpartij** is het, en welk product: beheerde Kubernetes, eigen
-   cluster op VM's, of alleen VM's?
-2. **Twee clusters mogelijk** voor DEV en productie, of één cluster met
-   namespaces? Dit bepaalt het hele isolatieontwerp.
-3. **Beheerde PostgreSQL** beschikbaar, of draaien we die zelf in het cluster?
-   Welke versie, en is point-in-time-herstel mogelijk?
-4. **Beheerde Redis** beschikbaar, of zelf draaien?
-5. **S3-compatibele objectopslag** beschikbaar? Welke endpoint, en is
-   versleuteling in rust standaard?
-6. **Container registry**: eigen registry, of GitHub Container Registry?
-7. **Ingress en TLS**: welke ingress-controller, en hoe worden certificaten
-   beheerd?
-8. **Secretvoorziening**: alleen Kubernetes-secrets, of een kluis?
-9. **Back-ups**: wat verzorgt de host, met welke frequentie en bewaartermijn,
-   en kunnen wij een herstelproef uitvoeren?
-10. **Monitoring en logging**: wat is er al, en kunnen we daar
-    OpenTelemetry-traces in kwijt?
-11. **Uitgaande e-mail**: mag de applicatie via Microsoft 365 verzenden, of is
-    er een relay?
-12. **Gebruikt u GitHub?** Dat bepaalt of CI/CD op GitHub Actions kan.
+| | |
+|---|---|
+| Hostingpartij | **Decorsign** |
+| Orkestratie | **K3s**, door Decorsign beheerd. Geen cluster-admin of `kubectl` vanuit dit project. |
+| Deployment | **ArgoCD**, door Decorsign beheerd. Nieuwe projecten aanvragen bij hen. |
+| Clusters | **Eén**, gescheiden met namespaces `rgh-dev` en `rgh-prod` en twee ArgoCD-projecten |
+| PostgreSQL | zelf gedraaid in het cluster. **Eigen instantie per namespace** - afwijking van het bestaande project, zie risico R1 in ADR-0010 |
+| Valkey | nog niet aanwezig in het cluster; kleine StatefulSet per namespace |
+| Versiebeheer en CI | **GitHub** en GitHub Actions; repository nog aan te maken |
+| Domein | `promohouse.nl` draagt de huidige webshop. Platform op subdomeinen: `hub.` en `klanten.`, met `.dev.` ervoor op DEV |
+| Back-up en PITR | **onbekend** - harde voorwaarde voor livegang, zie risico R2 |
+
+### Nog te vragen aan Decorsign
+
+1. Ondersteunen jullie ArgoCD-projecten **Helm**, of werken jullie met
+   **Kustomize**? Wij volgen wat jullie beheren.
+2. Mag ons ArgoCD-project **eigen StatefulSets en PersistentVolumeClaims**
+   aanmaken, voor een eigen PostgreSQL en een Valkey per namespace? Of levert
+   Decorsign die infrastructuur?
+3. Kunnen DEV en productie een **eigen PostgreSQL-instantie** krijgen in plaats
+   van één gedeelde met verschillende databasenamen?
+4. Welke **back-upstrategie** loopt er op de PostgreSQL-volumes, met welke
+   frequentie en bewaartermijn, en is **point-in-time-herstel** mogelijk?
+   Kunnen wij een herstelproef uitvoeren?
+5. Welk **container registry** gebruiken we: GitHub Container Registry of een
+   registry van Decorsign?
+6. Welke **ingress-controller** staat er, en hoe wordt **TLS** geregeld
+   (cert-manager, of handmatig)?
+7. Wie beheert de **DNS** van `promohouse.nl`, en kunnen de subdomeinen
+   `hub.`, `klanten.` en hun `.dev.`-varianten naar de cluster-ingress wijzen
+   zonder de huidige webshop te raken?
+8. Is er **monitoring en logging** waar wij OpenTelemetry-traces in kwijt
+   kunnen, of regelen we dat zelf in onze namespace?
+9. Welke **secretvoorziening** is beschikbaar: Kubernetes-secrets, sealed
+   secrets, of een kluis?
+10. Mag de applicatie **uitgaande e-mail** via Microsoft 365 versturen, of
+    loopt dat via een relay?
 
 ## 3. Omgevingen
 
@@ -99,28 +116,34 @@ Afspraken:
   opeet.
 - Pod-securitycontext: niet als root, read-only root filesystem,
   capabilities gedropt.
-- Helm met één chart en per omgeving een values-bestand. Geen gekopieerde
-  manifesten per omgeving.
+- Eén set manifesten met een overlay per omgeving. Of dat Helm of Kustomize
+  wordt, hangt af van wat Decorsign ondersteunt (vraag 1 hierboven). Geen
+  gekopieerde manifesten per omgeving.
 
-## 5. CI/CD
+## 5. CI/CD: GitHub Actions bouwt, ArgoCD deployt
 
-Uitgangspunt GitHub Actions, onder voorbehoud van vraag 12.
+Omdat er geen cluster-admin is, deployt CI nooit zelf.
 
 **Op elke pull request:** install, typecheck, lint, unit- en integratietests
 tegen een wegwerpdatabase, migratiecontrole (schema en migraties lopen
-gelijk), build van de images, Playwright-tests tegen de gebouwde applicatie.
+gelijk), image bouwen, Playwright-tests tegen de gebouwde applicatie.
 
-**Op `main`, na goedkeuring:** image bouwen en pushen met digest,
-migratie-Job op DEV, deploy naar DEV, smoke-tests.
+**Op `main`:** image bouwen en pushen met een onveranderlijke digest, die
+digest in de DEV-manifesten schrijven, commit. ArgoCD synchroniseert `rgh-dev`
+automatisch. Daarna smoke-tests tegen DEV.
 
-**Naar productie:** uitsluitend handmatig, met een expliciete goedkeuringsstap
-en de digest die al op DEV heeft gedraaid. Geen rebuild tussen DEV en
-productie — exact hetzelfde image.
+**Naar productie:** de digest die al op DEV draaide wordt in de
+productiemanifesten gezet, in een aparte pull request. Het ArgoCD-project
+`rgh-prod` staat op **handmatige sync**, dus niemand kan productie per ongeluk
+wijzigen. Geen rebuild tussen DEV en productie: exact hetzelfde image.
 
-**Terugrollen:** vorige digest opnieuw uitrollen. Database-migraties zijn
-voorwaarts: een migratie die niet terug te draaien is krijgt een expliciete
-waarschuwing in de pull request, en bij zo'n migratie wordt eerst een back-up
-geverifieerd.
+**Terugrollen:** de vorige digest terugzetten in de manifesten. Omdat de staat
+in Git staat, is terugrollen een commit en geen clusteractie.
+
+**Migraties** draaien als Job vóór de nieuwe pods verkeer krijgen. Migraties
+zijn voorwaarts; een migratie die niet terug te draaien is krijgt een
+expliciete waarschuwing in de pull request, en dan wordt eerst een back-up
+geverifieerd - wat met risico R2 uit ADR-0010 nu nog niet aantoonbaar is.
 
 ## 6. Observability
 
@@ -138,8 +161,10 @@ achter, SnelStart-synchronisatie faalt herhaaldelijk, back-up mislukt.
 
 | | Risico | Beheersing |
 |---|---|---|
-| A1 | De host biedt geen beheerde PostgreSQL of Redis | zelf draaien in het cluster met persistente opslag; meer beheerlast, ontwerp verandert niet |
-| A2 | Eén cluster in plaats van twee | strikte namespace-isolatie; restrisico blijft hoger, expliciet vastleggen |
+| A1 | **Bevestigd:** geen beheerde PostgreSQL, geen Redis aanwezig | zelf draaien in het cluster per namespace; zie ADR-0010 |
+| A2 | **Bevestigd:** één cluster | strikte namespace-isolatie, geen gedeelde secrets, handmatige sync op productie; restrisico blijft en is geaccepteerd |
+| A9 | **Nieuw:** dev en productie delen in het bestaande project één PostgreSQL-instantie | eigen instantie per namespace aanvragen; lukt dat niet, dan rollen scheiden met REVOKE CONNECT en het restrisico vastleggen (ADR-0010 R1) |
+| A10 | **Nieuw:** back-up en point-in-time-herstel niet aantoonbaar | navragen bij Decorsign en een herstelproef doen; harde voorwaarde voor livegang (ADR-0010 R2) |
 | A3 | SnelStart ondersteunt niet alle gewenste handelingen via de API | eerst een integratieproef; bij ontbrekende functionaliteit een controleerbare alternatieve werkwijze zonder dubbele boekingen |
 | A4 | Microsoft Graph-permissies beperkter dan gehoopt | eerst vaststellen welke mailboxen en permissies mogen; functionaliteit daarop aanpassen in plaats van omgekeerd |
 | A5 | Node 26 is geen LTS | bij onverklaarbare bouwfouten Node 24 LTS vastpinnen |
