@@ -254,8 +254,9 @@ export function Calculator({
           <fieldset className="mt-5">
             <legend className="text-sm font-medium text-ink-soft">Bedrukking</legend>
             <p className="mt-1 text-xs text-ink-faint">
-              Het logoformaat is alleen nodig bij technieken die per oppervlak rekenen; die
-              weigeren zonder.
+              Technieken die per oppervlak rekenen gebruiken standaard de <strong>maximale</strong>{' '}
+              drukmaat. Dat hoef je dus niet in te vullen, en de prijs is nooit te laag doordat
+              een formaat vergeten is. Een kleiner logo kun je invullen om scherper te offreren.
             </p>
             <div className="mt-2 grid gap-2">
               {product!.printOptions.map((optie) => {
@@ -300,7 +301,7 @@ export function Calculator({
                           logo cm²
                           <Input
                             value={oppervlak[optie.id] ?? ''}
-                            placeholder="bv. 12"
+                            placeholder="max"
                             onChange={(e) =>
                               setOppervlak((o) => ({ ...o, [optie.id]: e.target.value }))
                             }
@@ -606,6 +607,7 @@ export function Calculator({
                     <div className="flex items-baseline justify-between gap-4 text-xs text-ink-faint">
                       <span>
                         inkoop {formatEuro(p.unitPurchaseCost)} · marge {p.marginPercent}%
+                        {p.areaCm2 !== null && ` · gerekend met ${p.areaCm2} cm²`}
                       </span>
                       <span className="tabular">instelkosten {formatEuro(p.setupSaleCost)}</span>
                     </div>

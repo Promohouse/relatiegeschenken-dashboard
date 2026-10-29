@@ -119,6 +119,15 @@ const OPPERVLAKTEGEBASEERD: PrintPricingType[] = ['AreaRange', 'ColourAreaRange'
 /** Types waarbij de prijs per vierkante centimeter geldt. */
 const PER_VIERKANTE_CENTIMETER: PrintPricingType[] = ['Area']
 
+/**
+ * Prijstypes waarvoor het logoformaat uitmaakt. Bij de rest verandert het
+ * oppervlak de prijs niet, en dan is het tonen ervan misleidend.
+ */
+export const PRIJSTYPES_MET_OPPERVLAK: PrintPricingType[] = [
+  ...OPPERVLAKTEGEBASEERD,
+  ...PER_VIERKANTE_CENTIMETER,
+]
+
 /** Of de indicator zegt dat vervolgkleuren een eigen prijs hebben. */
 function vervolgkleurHeeftEigenPrijs(indicator: string | null | undefined): boolean {
   const schoon = (indicator ?? '').trim().toLowerCase()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  calculateQuoteLine, salePriceForMargin, type QuoteLineInput,
+  calculateQuoteLine, maxPrintAreaCm2, salePriceForMargin, type QuoteLineInput,
 } from '../src/quote-calculation'
 
 /**
@@ -214,5 +214,31 @@ describe('prijs per stuk, alles bij elkaar', () => {
   it('is zonder bedrukking gelijk aan de prijs na korting', () => {
     const r = calculateQuoteLine(basis)
     expect(r.allInUnitPrice.toFixed(2)).toBe(r.effectiveUnitPrice.toFixed(2))
+  })
+})
+
+describe('maxPrintAreaCm2', () => {
+  it('rekent millimeters om naar vierkante centimeters', () => {
+    // 50 bij 30 millimeter is 1500 vierkante millimeter, oftewel 15 cm2.
+    expect(maxPrintAreaCm2(50, 30)).toBe(15)
+    expect(maxPrintAreaCm2('170', '90')).toBe(153)
+  })
+
+  it('rondt af op twee decimalen', () => {
+    expect(maxPrintAreaCm2(33, 17)).toBe(5.61)
+  })
+
+  it('geeft null als de leverancier geen maximum opgeeft', () => {
+    // Niets om op terug te vallen. Dan hoort de calculatie dat te zeggen in
+    // plaats van met nul te rekenen, want nul kost niets.
+    expect(maxPrintAreaCm2(null, 30)).toBeNull()
+    expect(maxPrintAreaCm2(50, null)).toBeNull()
+    expect(maxPrintAreaCm2(undefined, undefined)).toBeNull()
+  })
+
+  it('geeft null bij een maat van nul of minder', () => {
+    expect(maxPrintAreaCm2(0, 30)).toBeNull()
+    expect(maxPrintAreaCm2(50, 0)).toBeNull()
+    expect(maxPrintAreaCm2(-10, 30)).toBeNull()
   })
 })

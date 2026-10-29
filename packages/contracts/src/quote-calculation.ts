@@ -36,6 +36,12 @@ export interface PrintPositionInput {
    * bevat.
    */
   marginPercent?: Decimal.Value | null
+  /**
+   * Het logo-oppervlak waarmee gerekend is. Alleen informatief: het prijswerk
+   * is al gedaan voordat deze waarde hier komt. Null bij technieken die niet
+   * per oppervlak rekenen.
+   */
+  areaCm2?: number | null
 }
 
 export interface QuoteLineInput {
@@ -68,6 +74,8 @@ export interface PrintPositionResult {
   positionName: string
   methodName: string
   colors: number
+  /** Het oppervlak waarmee gerekend is; null als het niet meetelt. */
+  areaCm2: number | null
   unitPurchaseCost: Decimal
   setupPurchaseCost: Decimal
   marginPercent: Decimal
@@ -102,6 +110,35 @@ export interface QuoteLineResult extends OrderLineTotals {
   shippingResult: Decimal
   /** De prijs ligt onder de inkoop; verliesgevend, maar soms een keuze. */
   belowCost: boolean
+}
+
+/**
+ * Het oppervlak van de grootst mogelijke bedrukking, in vierkante centimeters.
+ *
+ * Technieken die per oppervlak prijzen hebben een formaat nodig. Dat formaat
+ * per calculatie opvragen is in de praktijk onwerkbaar - bij een offerte is
+ * het logo meestal nog niet bekend - en een te klein formaat levert een te
+ * lage prijs op die pas bij de leveranciersfactuur opvalt. Daarom is de
+ * maximale drukmaat het vertrekpunt: die is bekend uit de drukgegevens en
+ * zit altijd aan de veilige kant.
+ *
+ * Null als de leverancier geen maximum opgeeft; dan is er niets om op terug
+ * te vallen en hoort de calculatie dat te zeggen in plaats van te gokken.
+ */
+export function maxPrintAreaCm2(
+  widthMm: Decimal.Value | null | undefined,
+  heightMm: Decimal.Value | null | undefined,
+): number | null {
+  if (widthMm === null || widthMm === undefined) return null
+  if (heightMm === null || heightMm === undefined) return null
+
+  const breedte = new Decimal(widthMm)
+  const hoogte = new Decimal(heightMm)
+  if (breedte.lessThanOrEqualTo(0) || hoogte.lessThanOrEqualTo(0)) return null
+
+  // Millimeters maal millimeters is vierkante millimeters; honderd daarvan
+  // gaan in een vierkante centimeter.
+  return round2(breedte.times(hoogte).dividedBy(100)).toNumber()
 }
 
 /** Marge als percentage van de verkoopprijs, de maat die in de handel telt. */
@@ -158,6 +195,7 @@ export function calculateQuoteLine(input: QuoteLineInput): QuoteLineResult {
       positionName: positie.positionName,
       methodName: positie.methodName,
       colors: positie.colors,
+      areaCm2: positie.areaCm2 ?? null,
       unitPurchaseCost: round4(inkoopDruk),
       setupPurchaseCost: round4(inkoopSetup),
       marginPercent: round2(bruikbareMarge),
@@ -236,6 +274,11 @@ export const calculateQuoteLineSchema = z.object({
    * volgorde. Nodig bij technieken die per oppervlak rekenen; die weigeren
    * zonder.
    */
+  /**
+   * Leeg of nul betekent: reken met de maximale drukmaat van die positie. Zo
+   * hoeft er per calculatie niets ingevuld te worden en is de prijs nooit te
+   * laag doordat er een formaat vergeten is.
+   */
   printAreaCm2: z.array(z.coerce.number().min(0).max(100000)).default([]),
   printMarginPercent: z.coerce.number().min(0).max(99.99).optional(),
   manualUnitSalePrice: z.coerce.number().min(0).optional(),
@@ -271,6 +314,7 @@ export const quoteLineCalculationSchema = z.object({
       positionName: z.string(),
       methodName: z.string(),
       colors: z.number().int(),
+      areaCm2: z.number().nullable(),
       unitPurchaseCost: z.string(),
       setupPurchaseCost: z.string(),
       marginPercent: z.string(),

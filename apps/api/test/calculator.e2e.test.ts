@@ -413,12 +413,91 @@ describe('offertecalculator', () => {
       }
     })
 
+    it('rekent per oppervlak standaard met de maximale drukmaat', async () => {
+      /*
+       * De keuze van de opdrachtgever: bij een offerte is het logo meestal
+       * nog niet bekend, en een te klein formaat levert een te lage prijs op
+       * die pas bij de leveranciersfactuur opvalt. De grootste maat zit aan
+       * de veilige kant, en hoeft dus niet per calculatie ingevuld te worden.
+       */
+      await prisma.unscoped.supplierPrintTechnique.update({
+        where: { connectionId_code: { connectionId, code: 'P3' } },
+        data: {
+          pricingType: 'Area',
+          varCosts: [{ rangeId: null, areaFrom: 0, areaTo: 0, scales: [{ minimumQuantity: 1, price: '0,011' }] }],
+        },
+      })
+      await prisma.unscoped.productPrintOption.updateMany({
+        where: { productId }, data: { maxPrintWidthMm: '50', maxPrintHeightMm: '30' },
+      })
+      try {
+        // Geen formaat meegestuurd.
+        const res = await reken({ printOptionIds: [printOptionId], printColors: [1] }).expect(200)
+
+        // 50 bij 30 mm is 15 cm2. 250 x 0,011 x 15 = 41,25 druk, plus
+        // 250 x 0,12 handling = 30, samen 71,25 oftewel 0,285 per stuk.
+        expect(res.body.printPositions[0].unitPurchaseCost).toBe('0.2850')
+        // En de uitkomst zegt met welk oppervlak gerekend is.
+        expect(res.body.printPositions[0].areaCm2).toBe(15)
+        expect(res.body.warnings.join(' ')).not.toContain('kon niet berekend worden')
+      } finally {
+        await prisma.unscoped.productPrintOption.updateMany({
+          where: { productId }, data: { maxPrintWidthMm: null, maxPrintHeightMm: null },
+        })
+        await prisma.unscoped.supplierPrintTechnique.update({
+          where: { connectionId_code: { connectionId, code: 'P3' } },
+          data: { pricingType: 'NumberOfColours' },
+        })
+      }
+    })
+
+    it('laat een ingevuld formaat voorgaan op de maximale maat', async () => {
+      await prisma.unscoped.supplierPrintTechnique.update({
+        where: { connectionId_code: { connectionId, code: 'P3' } },
+        data: {
+          pricingType: 'Area',
+          varCosts: [{ rangeId: null, areaFrom: 0, areaTo: 0, scales: [{ minimumQuantity: 1, price: '0,011' }] }],
+        },
+      })
+      await prisma.unscoped.productPrintOption.updateMany({
+        where: { productId }, data: { maxPrintWidthMm: '50', maxPrintHeightMm: '30' },
+      })
+      try {
+        // Een klant met een klein logo mag scherper geoffreerd worden.
+        const res = await reken({
+          printOptionIds: [printOptionId], printColors: [1], printAreaCm2: [5],
+        }).expect(200)
+
+        // 250 x 0,011 x 5 = 13,75 druk plus 30 handling = 43,75; 0,175 per stuk.
+        expect(res.body.printPositions[0].unitPurchaseCost).toBe('0.1750')
+        expect(res.body.printPositions[0].areaCm2).toBe(5)
+      } finally {
+        await prisma.unscoped.productPrintOption.updateMany({
+          where: { productId }, data: { maxPrintWidthMm: null, maxPrintHeightMm: null },
+        })
+        await prisma.unscoped.supplierPrintTechnique.update({
+          where: { connectionId_code: { connectionId, code: 'P3' } },
+          data: { pricingType: 'NumberOfColours' },
+        })
+      }
+    })
+
+    it('laat het oppervlak weg bij technieken waar het niet meetelt', async () => {
+      // P3 staat op NumberOfColours; dan verandert het formaat de prijs niet
+      // en zou een getal tonen misleidend zijn.
+      const res = await reken({ printOptionIds: [printOptionId], printColors: [1] }).expect(200)
+      expect(res.body.printPositions[0].areaCm2).toBeNull()
+    })
+
     it('meldt het als een prijs per oppervlak zonder formaat gevraagd wordt', async () => {
       await prisma.unscoped.supplierPrintTechnique.update({
         where: { connectionId_code: { connectionId, code: 'P3' } },
         data: { pricingType: 'Area' },
       })
       try {
+        // Dit artikel heeft geen maximale drukmaat, dus er is niets om op
+        // terug te vallen. Dan hoort de calculatie dat te zeggen in plaats
+        // van met nul te rekenen, want nul kost niets.
         const res = await reken({ printOptionIds: [printOptionId], printColors: [1] }).expect(200)
         expect(res.body.warnings.join(' ')).toContain('kon niet berekend worden')
         expect(res.body.printPositions[0].unitPurchaseCost).toBe('0.0000')

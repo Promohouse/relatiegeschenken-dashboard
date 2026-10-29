@@ -11,6 +11,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   zegt waar de prijs vandaan komt — prijsregel, klantafspraak of handmatig —
   en wat de werkelijke marge is. Er wordt niets opgeslagen: een calculatie is
   een vraag, geen handeling.
+- **De calculator rekent bedrukking standaard met de maximale drukmaat.** Bij
+  een offerte is het logo meestal nog niet bekend, en een te klein formaat
+  levert een te lage prijs op die pas bij de leveranciersfactuur opvalt. Er
+  hoeft dus niets meer ingevuld te worden; een kleiner logo kan nog steeds
+  ingevuld worden om scherper te offreren, en de uitkomst zegt met welk
+  oppervlak gerekend is. Geeft de leverancier geen maximum, dan waarschuwt de
+  calculatie zoals voorheen in plaats van met nul te rekenen.
 - **PF Concept-connector** (`pfconcept-feed`). Leest hun datafeeds v3 in JSON:
   catalogus, prijzen, voorraad, drukgegevens en drukprijzen, met de
   bestandsnamen per taal, afdeling en assortiment. Nog niet tegen echte

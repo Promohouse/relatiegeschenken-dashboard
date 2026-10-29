@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
-  calculatePrintPositionCost, calculateQuoteLine, parseSupplierDecimal, selectTier,
+  calculatePrintPositionCost, calculateQuoteLine, maxPrintAreaCm2, parseSupplierDecimal,
+  PRIJSTYPES_MET_OPPERVLAK, selectTier,
   type CalculateQuoteLine, type CalculateTiers, type PrintPositionInput, type PrintPricingType,
   type PrintVarCost, type QuoteLineCalculation, type QuoteTiers,
 } from '@rgh/contracts'
@@ -138,6 +139,7 @@ export class CalculatorService {
         positionName: p.positionName,
         methodName: p.methodName,
         colors: p.colors,
+        areaCm2: p.areaCm2,
         unitPurchaseCost: p.unitPurchaseCost.toFixed(4),
         setupPurchaseCost: p.setupPurchaseCost.toFixed(4),
         marginPercent: p.marginPercent.toFixed(2),
@@ -199,6 +201,8 @@ export class CalculatorService {
         priceTiers: true,
         product: { select: { printManipulationCode: true } },
       },
+      // maxPrintWidthMm en maxPrintHeightMm komen via het model mee; ze
+      // bepalen het oppervlak waarmee standaard gerekend wordt.
     })
 
     // De drukprijslijst van de leverancier van dit product, als die er is.
@@ -265,6 +269,37 @@ export class CalculatorService {
   }
 
   /**
+   * Met welk oppervlak gerekend wordt.
+   *
+   * Standaard de maximale drukmaat van de positie. Dat is een bewuste keuze
+   * van de opdrachtgever: bij een offerte is het logo meestal nog niet
+   * bekend, en een te klein formaat levert een te lage prijs op die pas bij
+   * de leveranciersfactuur opvalt. De grootste maat zit altijd aan de veilige
+   * kant.
+   *
+   * Een ingevuld formaat gaat wel voor, zodat een klant met een klein logo
+   * alsnog scherper geoffreerd kan worden. Nul telt als niet ingevuld: dat is
+   * wat het scherm stuurt bij een leeg veld.
+   */
+  private oppervlak(
+    optie: {
+      maxPrintWidthMm: { toString(): string } | null
+      maxPrintHeightMm: { toString(): string } | null
+    },
+    index: number,
+    input: CalculateQuoteLine,
+  ): number | null {
+    // De invoervelden lopen gelijk op met de gekozen bedrukkingen.
+    const ingevuld = input.printAreaCm2?.[index]
+    if (typeof ingevuld === 'number' && ingevuld > 0) return ingevuld
+
+    return maxPrintAreaCm2(
+      optie.maxPrintWidthMm?.toString() ?? null,
+      optie.maxPrintHeightMm?.toString() ?? null,
+    )
+  }
+
+  /**
    * De drukprijslijst van de leverancier die dit product levert.
    *
    * Null als er geen koppeling of geen prijslijst is; dan vallen we terug op
@@ -312,6 +347,8 @@ export class CalculatorService {
       printMethod: { name: string }
       printPosition: { name: string }
       positionLabel: string | null
+      maxPrintWidthMm: { toString(): string } | null
+      maxPrintHeightMm: { toString(): string } | null
       product: { printManipulationCode: string | null }
     },
     kleuren: number,
@@ -333,8 +370,7 @@ export class CalculatorService {
       : null
 
     const positienaam = optie.positionLabel ?? optie.printPosition.name
-    // De invoervelden lopen gelijk op met de gekozen bedrukkingen.
-    const oppervlak = input.printAreaCm2?.[index] ?? null
+    const oppervlak = this.oppervlak(optie, index, input)
 
     try {
       const uitkomst = calculatePrintPositionCost({
@@ -369,6 +405,9 @@ export class CalculatorService {
         positionName: positienaam,
         methodName: optie.printMethod.name,
         colors: kleuren,
+        areaCm2: PRIJSTYPES_MET_OPPERVLAK.includes(techniek.pricingType as PrintPricingType)
+          ? oppervlak
+          : null,
         unitPurchaseCost: perStuk.toFixed(4),
         setupPurchaseCost: uitkomst.setupCost.toFixed(4),
         marginPercent: drukmarge,
