@@ -18,6 +18,16 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   ingevuld worden om scherper te offreren, en de uitkomst zegt met welk
   oppervlak gerekend is. Geeft de leverancier geen maximum, dan waarschuwt de
   calculatie zoals voorheen in plaats van met nul te rekenen.
+- **Importmapping voor PF Concept.** De pijplijn verwerkt nu twee soorten
+  drukprijslijst. Catalogus, prijzen en voorraad liepen al generiek; de
+  drukprijzen van PF landen in twee nieuwe tabellen als opzoektabel over
+  formaat, kleuren en aantal. Een nieuwe lijst vervangt de oude per drukcode,
+  want een achtergebleven regel zou gekozen kunnen worden en een verkeerde
+  prijs geven.
+- Het **minimum bedrukkingsaantal** komt mee uit de prijsfeed en staat
+  voortaan op de leverancierskoppeling. Onder dat aantal rekent PF een
+  toeslag; zonder dat getal is een kleine bedrukte oplage te goedkoop
+  berekend.
 - **ANDA-connector** (`anda-xml`). Leest hun XML-feeds: catalogus, prijzen,
   voorraad en drukgegevens. Artikelnummers worden op `rootItemNumber`
   gegroepeerd tot één product met varianten, want ANDA kent geen

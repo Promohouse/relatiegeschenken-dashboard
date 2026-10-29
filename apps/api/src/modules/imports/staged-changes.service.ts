@@ -204,14 +204,18 @@ export class StagedChangesService {
       | { van: unknown; naar: { minimumQuantity: number; unitPrice: string }[] }
       | undefined
     const valuta = wijziging.diff.currency as { van: string; naar: string } | undefined
+    const minimum = wijziging.diff.minDecoQuantity as
+      | { van: number | null; naar: number }
+      | undefined
 
     await this.prisma.unscoped.$transaction(async (tx) => {
-      if (prijs || valuta) {
+      if (prijs || valuta || minimum) {
         await tx.productSupplier.update({
           where: { id: koppeling.id },
           data: {
             ...(prijs ? { purchasePrice: prijs.naar } : {}),
             ...(valuta ? { currency: valuta.naar } : {}),
+            ...(minimum ? { minDecoQuantity: minimum.naar } : {}),
           },
         })
       }

@@ -677,6 +677,10 @@ model ProductSupplier {
   currency              String  @default("EUR")
   minimumOrderQuantity  Int     @default(1)
   leadTimeDays          Int?
+  /// Minimum aantal voor bedrukken bij deze leverancier. Onder dit aantal
+  /// rekent hij een toeslag; die staat bij de drukprijzen als ltmCharge.
+  minDecoQuantity Int?
+
   isPreferred           Boolean @default(false)
   isActive              Boolean @default(true)
 
@@ -1557,6 +1561,8 @@ model SupplierConnection {
   stock              SupplierStock[]
   printTechniques    SupplierPrintTechnique[]
   printManipulations SupplierPrintManipulation[]
+  printMethods       SupplierPrintMethod[]
+  printPriceTiers    SupplierPrintPriceTier[]
   fieldMappings      FieldMapping[]
   valueMappings      ValueMapping[]
 
@@ -1686,6 +1692,64 @@ model SupplierPrintTechnique {
 }
 
 /// Handlingprijs per stuk, per manipulatiecode van de leverancier.
+/// De kop bij één drukcode van een leverancier die zijn drukprijzen als
+/// opzoektabel levert.
+///
+/// Staat naast `SupplierPrintTechnique` en niet in plaats daarvan: midocean
+/// en ANDA geven een prijs*structuur* die pas bij het calculeren uit te
+/// rekenen is (ADR-0016), PF Concept geeft een tabel (ADR-0019). Eén model
+/// voor allebei zou betekenen dat de ene leverancier zich voordoet als de
+/// andere, en zo krijg je verkeerde prijzen.
+model SupplierPrintMethod {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  /// Drukcode van de leverancier, bijvoorbeeld DEB02.
+  printCode   String
+  description String?
+  /// Toeslag bij bedrukken onder het minimum bedrukkingsaantal van het
+  /// artikel. Zonder deze toeslag is een kleine bedrukte oplage te goedkoop.
+  ltmCharge   Decimal? @db.Decimal(14, 4)
+  /// Waarvan de prijs afhangt, in de woorden van de leverancier. Bewust ruwe
+  /// tekst: welke waarden PF Concept hier gebruikt is nog niet bevestigd.
+  priceDependence String?
+  currency        String  @default("EUR")
+
+  fetchedAt DateTime @default(now())
+
+  tiers SupplierPrintPriceTier[]
+
+  @@unique([connectionId, printCode])
+  @@map("supplier_print_methods")
+}
+
+/// Eén regel uit zo'n opzoektabel: bij dit formaat, dit aantal kleuren en
+/// vanaf dit aantal stuks kost bedrukken dit.
+model SupplierPrintPriceTier {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  methodId String              @db.Uuid
+  method   SupplierPrintMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
+
+  /// Oppervlak waarvoor deze regel geldt; 0 betekent: formaat doet niet mee.
+  logoSizeCm2 Decimal @default(0) @db.Decimal(10, 2)
+  /// Aantal kleuren; 0 betekent: aantal kleuren doet niet mee (fullcolour).
+  colors      Int     @default(0)
+  /// Ondergrens, net als onze eigen staffels. Geen gesloten bereik.
+  minQuantity Int
+  unitPrice   Decimal @db.Decimal(14, 4)
+  setupCost   Decimal @default(0) @db.Decimal(14, 4)
+
+  fetchedAt DateTime @default(now())
+
+  @@unique([methodId, logoSizeCm2, colors, minQuantity])
+  @@index([connectionId])
+  @@map("supplier_print_price_tiers")
+}
+
 model SupplierPrintManipulation {
   id           String             @id @default(uuid()) @db.Uuid
   connectionId String             @db.Uuid

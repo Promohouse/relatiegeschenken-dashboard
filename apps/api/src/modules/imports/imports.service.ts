@@ -8,8 +8,8 @@ import { AppConfig } from '../../core/config/config.service'
 import { CredentialsService } from '../../core/connectors/credentials.service'
 import { ConnectorRegistry } from '../../core/connectors/connector.registry'
 import {
-  type CanonicalPrice, type CanonicalPrintData, type CanonicalProduct, type CanonicalStock,
-  type ConnectorContext, type FetchedRecord,
+  type CanonicalPrice, type CanonicalPrintData, type CanonicalPrintPriceList,
+  type CanonicalProduct, type CanonicalStock, type ConnectorContext, type FetchedRecord,
 } from '../../core/connectors/connector.types'
 import { NotFoundError, PreconditionError } from '../../core/errors/domain-errors'
 
@@ -150,14 +150,26 @@ export class ImportsService {
           run.id, verbinding, await connector.fetchPrices(context),
         )
       } else if (capability === 'PRINT_DATA') {
-        if (!connector.fetchPrintData || !connector.fetchPrintPrices) {
+        if (!connector.fetchPrintData) {
           throw new PreconditionError(`Connector ${connector.key} kan geen drukgegevens ophalen.`)
+        }
+        // Twee vormen drukprijslijst, en dat is geen toeval. midocean en ANDA
+        // geven een prijsstructuur die pas bij het calculeren uit te rekenen
+        // is (ADR-0016); PF Concept geeft een opzoektabel (ADR-0019). Een
+        // connector levert er één.
+        if (!connector.fetchPrintPrices && !connector.fetchPrintPriceTiers) {
+          throw new PreconditionError(
+            `Connector ${connector.key} levert geen drukprijzen. Zonder prijslijst zouden de ` +
+              'bedrukopties wel binnenkomen maar zonder prijs, en dat lijkt op een geslaagde ' +
+              'import terwijl er niets mee te calculeren valt.',
+          )
         }
         resultaat = await this.verwerkDrukgegevens(
           run.id,
           verbinding,
           await connector.fetchPrintData(context),
-          await connector.fetchPrintPrices(context),
+          connector.fetchPrintPrices ? await connector.fetchPrintPrices(context) : null,
+          connector.fetchPrintPriceTiers ? await connector.fetchPrintPriceTiers(context) : null,
           dryRun,
         )
       } else if (capability === 'INVENTORY') {
@@ -513,6 +525,7 @@ export class ImportsService {
         supplierArticleNumber: true,
         purchasePrice: true,
         currency: true,
+        minDecoQuantity: true,
         purchaseTiers: { select: { minQuantity: true, unitPrice: true }, orderBy: { minQuantity: 'asc' } },
       },
     })
@@ -652,6 +665,7 @@ export class ImportsService {
     koppeling: {
       purchasePrice: { toString(): string }
       currency: string
+      minDecoQuantity: number | null
       purchaseTiers: { minQuantity: number; unitPrice: { toString(): string } }[]
     },
     bron: CanonicalPrice,
@@ -680,6 +694,14 @@ export class ImportsService {
       diff.staffels = { van: huidigeStaffels, naar: nieuweStaffels }
     }
 
+    // Het minimum bedrukkingsaantal komt bij PF Concept uit de prijsfeed.
+    // Zonder dat getal is de toeslag onder dat aantal niet te rekenen en is
+    // een kleine bedrukte oplage te goedkoop.
+    const nieuwMinimum = bron.minDecoQuantity ?? null
+    if (nieuwMinimum !== null && koppeling.minDecoQuantity !== nieuwMinimum) {
+      diff.minDecoQuantity = { van: koppeling.minDecoQuantity, naar: nieuwMinimum }
+    }
+
     return Object.keys(diff).length > 0 ? diff : null
   }
 
@@ -700,15 +722,19 @@ export class ImportsService {
     importRunId: string,
     verbinding: { id: string; supplierId: string },
     records: FetchedRecord<CanonicalPrintData>[],
-    prijzen: Awaited<ReturnType<NonNullable<SupplierConnectorMetDruk['fetchPrintPrices']>>>,
+    prijzen: Awaited<ReturnType<NonNullable<SupplierConnectorMetDruk['fetchPrintPrices']>>> | null,
+    staffels: CanonicalPrintPriceList | null,
     dryRun: boolean,
   ) {
     const samenvatting: RunSummary = { created: 0, updated: 0, unchanged: 0, missing: 0, unmatched: 0 }
     let itemsFailed = 0
 
     if (!dryRun) {
-      await this.legPrijslijstVast(verbinding.id, prijzen)
-      await this.legTechniekenVast(prijzen)
+      if (prijzen) {
+        await this.legPrijslijstVast(verbinding.id, prijzen)
+        await this.legTechniekenVast(prijzen)
+      }
+      if (staffels) await this.legOpzoektabelVast(verbinding.id, staffels)
       await this.legPositiesVast(records)
     }
 
@@ -802,6 +828,55 @@ export class ImportsService {
   }
 
   /** De drukprijslijst van deze leverancier vastleggen. */
+  /**
+   * Een drukprijslijst die al een staffel is, zoals PF Concept die levert.
+   *
+   * De regels van een drukcode worden in hun geheel vervangen. Dat is bewust:
+   * dit is leveranciersdata die opnieuw opgehaald wordt en geen gegeven van
+   * ons, en een achtergebleven regel uit een vorige lijst zou gekozen kunnen
+   * worden en een verkeerde prijs geven. Harde regel 9 gaat over onze eigen
+   * gegevens; een prijslijst is een momentopname.
+   */
+  private async legOpzoektabelVast(connectionId: string, lijst: CanonicalPrintPriceList) {
+    for (const methode of lijst.methods) {
+      const gegevens = {
+        description: methode.description,
+        ltmCharge: methode.ltmCharge
+          ? parseSupplierDecimal(methode.ltmCharge, 'ltmCharge').toFixed(4)
+          : null,
+        priceDependence: methode.priceDependence,
+        currency: lijst.currency,
+        fetchedAt: new Date(),
+      }
+
+      const regels = lijst.tiers.filter((t) => t.printCode === methode.printCode)
+
+      await this.prisma.unscoped.$transaction(async (tx) => {
+        const opgeslagen = await tx.supplierPrintMethod.upsert({
+          where: { connectionId_printCode: { connectionId, printCode: methode.printCode } },
+          update: gegevens,
+          create: { connectionId, printCode: methode.printCode, ...gegevens },
+        })
+
+        await tx.supplierPrintPriceTier.deleteMany({ where: { methodId: opgeslagen.id } })
+        if (regels.length > 0) {
+          await tx.supplierPrintPriceTier.createMany({
+            data: regels.map((t) => ({
+              connectionId,
+              methodId: opgeslagen.id,
+              logoSizeCm2: t.logoSizeCm2.toFixed(2),
+              colors: t.colors,
+              minQuantity: t.minQuantity,
+              unitPrice: parseSupplierDecimal(t.unitPrice, 'drukprijs').toFixed(4),
+              setupCost: parseSupplierDecimal(t.setupCost, 'instelkosten').toFixed(4),
+            })),
+            skipDuplicates: true,
+          })
+        }
+      })
+    }
+  }
+
   private async legPrijslijstVast(
     connectionId: string,
     prijzen: Awaited<ReturnType<NonNullable<SupplierConnectorMetDruk['fetchPrintPrices']>>>,
