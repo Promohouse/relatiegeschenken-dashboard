@@ -4,7 +4,7 @@ import { ArrowLeft, Lock } from 'lucide-react'
 import { formatEuro, type QuoteView, type ShippingMethod } from '@rgh/contracts'
 import { apiGet, ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import { OfferteregelToevoegen } from '@/components/offerteregel-toevoegen'
+import { OfferteregelDialoog } from '@/components/offerteregel-dialoog'
 import { OfferteregelVerwijderen } from '@/components/offerteregel-verwijderen'
 import { getCurrentUser, mag } from '@/lib/session'
 
@@ -58,7 +58,10 @@ export default async function OffertePagina({ params }: { params: Promise<{ id: 
     throw error
   }
 
-  const verzendwijzen = await apiGet<ShippingMethod[]>('/api/settings/shipping-methods')
+  const [verzendwijzen, staffelaantallen] = await Promise.all([
+    apiGet<ShippingMethod[]>('/api/settings/shipping-methods'),
+    apiGet<number[]>('/api/settings/quote-tiers'),
+  ])
   const versie = offerte.currentVersion
   const vast = versie.lockedAt !== null
   const magWijzigen = mag(user, 'quotes:update') && !vast
@@ -112,8 +115,8 @@ export default async function OffertePagina({ params }: { params: Promise<{ id: 
       <h2 className="mt-6 text-sm font-semibold">Regels</h2>
       {versie.lines.length === 0 ? (
         <p className="mt-2 rounded border border-rule bg-surface p-5 text-sm text-ink-faint">
-          Nog geen regels. Zoek hieronder een product; de prijs wordt met dezelfde calculator
-          bepaald als op het calculatorscherm.
+          Nog geen regels. Reken er hieronder een door; dat gebeurt met dezelfde calculator als
+          op het calculatorscherm.
         </p>
       ) : (
         <div className="mt-2 overflow-x-auto rounded border border-rule bg-surface">
@@ -193,7 +196,18 @@ export default async function OffertePagina({ params }: { params: Promise<{ id: 
       )}
 
       {magWijzigen && (
-        <OfferteregelToevoegen quoteId={offerte.id} verzendwijzen={verzendwijzen} />
+        <div className="mt-5">
+          <OfferteregelDialoog
+            quoteId={offerte.id}
+            klant={{ id: offerte.customerId, name: offerte.customerName }}
+            staffelaantallen={staffelaantallen}
+            verzendwijzen={verzendwijzen}
+          />
+          <p className="mt-2 text-xs text-ink-faint">
+            De calculator opent in een venster. Je ziet de prijs, de marge en eventuele
+            waarschuwingen vóór de regel op de offerte komt.
+          </p>
+        </div>
       )}
 
       {versie.customerNotes && (

@@ -20,9 +20,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   calculatie zoals voorheen in plaats van met nul te rekenen.
 - **Offertescherm** (`/offertes`). Een overzicht met nummer, klant, aantal
   regels, totaal en status; een offerte aanmaken bij een klant; en een
-  detailscherm waar je regels toevoegt met dezelfde invoer als de calculator.
-  De regel verschijnt meteen in de tabel met zijn bedragen - er is geen
-  tussenstap, want dat zou een tweede plek zijn waar een prijs kan staan.
+  detailscherm met de regels en de totalen.
+- **De calculator opent als venster op de offerte.** Letterlijk dezelfde
+  calculator als op het calculatorscherm, niet een nagebouwde: je ziet de
+  prijs per stuk, de marge, de staffel en eventuele waarschuwingen, en pas
+  als je op toevoegen klikt komt de regel op de offerte. De klant ligt vast
+  op die van de offerte, dus zijn prijsafspraken en marge tellen mee zonder
+  dat er een andere klant gekozen kan worden.
 - Een vastgezette versie toont dat ook, en het toevoegen en verwijderen van
   regels verdwijnt dan uit het scherm. De database weigert het sowieso; dit is
   de beleefde kant ervan.

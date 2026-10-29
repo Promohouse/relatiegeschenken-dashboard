@@ -38,6 +38,9 @@ export function Calculator({
   klanten,
   staffelaantallen,
   verzendwijzen,
+  vasteKlant,
+  onToevoegen,
+  toevoegLabel = 'Toevoegen',
 }: {
   /** Product uit de URL, bijvoorbeeld via "Doorrekenen" op de productpagina. */
   beginProduct: ProductDetail | null
@@ -46,12 +49,31 @@ export function Calculator({
   staffelaantallen: number[]
   /** Verzendwijzen met hun bedragen, uit de instellingen. */
   verzendwijzen: ShippingMethod[]
+  /**
+   * Een vaste klant, bijvoorbeeld die van een offerte. Dan vervalt de keuze:
+   * er mag niet geprijsd worden voor een andere klant dan degene die de
+   * offerte krijgt.
+   */
+  vasteKlant?: { id: string; name: string }
+  /**
+   * Wat er met de doorgerekende regel gebeurt. Null betekent gelukt; een
+   * tekst is de melding die getoond wordt.
+   *
+   * Een callback en geen offerte-id, zodat de calculator niets van offertes
+   * hoeft te weten. Hij rekent; wat er daarna mee gebeurt is aan de
+   * aanroeper.
+   */
+  onToevoegen?: (invoer: Record<string, unknown>) => Promise<string | null>
+  toevoegLabel?: string
 }) {
   const [product, setProduct] = useState<ProductDetail | null>(beginProduct)
+  const [omschrijving, setOmschrijving] = useState('')
+  const [toevoegFout, setToevoegFout] = useState<string | null>(null)
+  const [toevoegen, setToevoegen] = useState(false)
   const [laadFout, setLaadFout] = useState<string | null>(null)
   const [laden, setLaden] = useState(false)
   const [quantity, setQuantity] = useState('250')
-  const [customerId, setCustomerId] = useState('')
+  const [customerId, setCustomerId] = useState(vasteKlant?.id ?? '')
   const [gekozenDruk, setGekozenDruk] = useState<Record<string, number>>({})
   const [oppervlak, setOppervlak] = useState<Record<string, string>>({})
   const [manueel, setManueel] = useState('')
@@ -230,23 +252,37 @@ export function Calculator({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="customerId" className="text-sm font-medium text-ink-soft">
-              Klant
-            </label>
-            <select
-              id="customerId"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className="h-9 rounded border border-rule bg-surface px-2 text-sm focus:border-accent focus:outline-none"
-            >
-              <option value="">Geen klant — algemene prijs</option>
-              {klanten.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-ink-faint">Een klant laat zijn prijsafspraken meetellen.</p>
+            <span className="text-sm font-medium text-ink-soft">Klant</span>
+            {vasteKlant ? (
+              <>
+                <p className="flex h-9 items-center text-sm">{vasteKlant.name}</p>
+                <p className="text-xs text-ink-faint">
+                  De klant van deze offerte. Zijn prijsafspraken en marge tellen mee.
+                </p>
+              </>
+            ) : (
+              <>
+                <label htmlFor="customerId" className="sr-only">
+                  Klant
+                </label>
+                <select
+                  id="customerId"
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                  className="h-9 rounded border border-rule bg-surface px-2 text-sm focus:border-accent focus:outline-none"
+                >
+                  <option value="">Geen klant — algemene prijs</option>
+                  {klanten.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-ink-faint">
+                  Een klant laat zijn prijsafspraken meetellen.
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -667,6 +703,51 @@ export function Calculator({
                 </p>
               )}
             </div>
+
+            {onToevoegen && (
+              <div className="border-t border-rule pt-4">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="omschrijving" className="text-sm font-medium text-ink-soft">
+                    Omschrijving op de offerte
+                  </label>
+                  <Input
+                    id="omschrijving"
+                    value={omschrijving}
+                    placeholder="leeg = de productnaam"
+                    onChange={(e) => setOmschrijving(e.target.value)}
+                  />
+                </div>
+
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    disabled={toevoegen}
+                    onClick={() => {
+                      setToevoegFout(null)
+                      setToevoegen(true)
+                      // Precies de invoer waarmee zojuist gerekend is. Zou de
+                      // regel met andere waarden weggeschreven worden, dan
+                      // staat er straks een ander bedrag op de offerte dan
+                      // hierboven.
+                      void onToevoegen({ ...invoer(), quantity, description: omschrijving })
+                        .then((melding) => setToevoegFout(melding))
+                        .finally(() => setToevoegen(false))
+                    }}
+                  >
+                    {toevoegen ? 'Bezig met toevoegen…' : toevoegLabel}
+                  </Button>
+                </div>
+
+                {toevoegFout && (
+                  <p
+                    role="status"
+                    className="mt-3 rounded border border-alarm/30 bg-alarm-bg px-3 py-2 text-sm text-alarm"
+                  >
+                    {toevoegFout}
+                  </p>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
