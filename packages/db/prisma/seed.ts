@@ -152,6 +152,12 @@ async function seedBaseData() {
     { key: 'company.slogan', value: 'verrassend anders', description: 'Zin onder het logo op documenten.' },
     { key: 'company.logoLight', value: '/merk/promohouse-donker.png', description: 'Logo voor een lichte ondergrond.' },
     { key: 'company.logoDark', value: '/merk/promohouse-licht.png', description: 'Logo voor een donkere ondergrond.' },
+    {
+      key: 'company.accentColor', value: '#f26701',
+      description:
+        'Huisstijlkleur op documenten. Afgelezen uit het logo; controleer hem tegen het ' +
+        'briefpapier voordat er een offerte uitgaat.',
+    },
   ]
   for (const s of settings) {
     await prisma.setting.upsert({

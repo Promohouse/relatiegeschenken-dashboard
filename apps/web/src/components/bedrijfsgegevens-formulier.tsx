@@ -91,6 +91,24 @@ export function BedrijfsgegevensFormulier({ gegevens }: { gegevens: CompanySetti
           fout={fouten.logoDark}
           onChange={zet('logoDark')}
         />
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <FormVeld
+              naam="accentColor"
+              label="Huisstijlkleur"
+              waarde={waarden.accentColor}
+              fout={fouten.accentColor}
+              hint="Als hexcode, bijvoorbeeld #f26701. Komt op de offerte-PDF."
+              onChange={zet('accentColor')}
+            />
+          </div>
+          <span
+            aria-hidden
+            title="Voorbeeld van de huisstijlkleur"
+            className="mb-6 size-9 shrink-0 rounded border border-rule"
+            style={{ background: /^#[0-9a-fA-F]{6}$/.test(waarden.accentColor) ? waarden.accentColor : 'transparent' }}
+          />
+        </div>
       </div>
 
       {algemeen && (

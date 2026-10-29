@@ -84,6 +84,7 @@ describe('bedrijfsgegevens en weergave', () => {
     slogan: 'verrassend anders',
     logoLight: '/merk/promohouse-donker.png',
     logoDark: '/merk/promohouse-licht.png',
+    accentColor: '#f26701',
   }
 
   it('slaat de gegevens op en haalt de spaties uit het IBAN', async () => {
@@ -94,6 +95,15 @@ describe('bedrijfsgegevens en weergave', () => {
     // Zonder spaties, zodat een betaalbestand hem kan gebruiken.
     expect(res.body.iban).toBe('NL39RABO0172495423')
     expect(res.body.vatNumber).toBe('NL815249135B01')
+    expect(res.body.accentColor).toBe('#f26701')
+  })
+
+  it('weigert een huisstijlkleur die geen hexcode is', async () => {
+    // De kleur komt op de offerte-PDF; een onbruikbare waarde zou daar als
+    // zwart of helemaal niet uitkomen.
+    const res = await api().patch('/api/settings/company').set('Cookie', cookie)
+      .send({ ...volledig, accentColor: 'oranje' }).expect(400)
+    expect(JSON.stringify(res.body)).toContain('#f26701')
   })
 
   it('laat iedereen die is ingelogd de gegevens lezen', async () => {

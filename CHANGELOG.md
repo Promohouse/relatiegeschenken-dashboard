@@ -18,6 +18,16 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   ingevuld worden om scherper te offreren, en de uitkomst zegt met welk
   oppervlak gerekend is. Geeft de leverancier geen maximum, dan waarschuwt de
   calculatie zoals voorheen in plaats van met nul te rekenen.
+- **De offerte als PDF** (`/api/quotes/{id}/pdf`, knop op het offertescherm).
+  Met de teksten uit de sjablonen, de bedrijfsgegevens uit de instellingen in
+  drie kolommen onderaan, en de huisstijlkleur als accent. Wat erop komt te
+  staan wordt los van het tekenwerk bepaald en is dus getest - de PDF tekent
+  alleen.
+- Een sjabloonregel waarvan alle velden leeg blijven verdwijnt. Zonder die
+  regel staat er "Kleur:" zonder kleur op een offerte die naar een klant gaat.
+- **De huisstijlkleur is een instelling** (`company.accentColor`), afgelezen
+  uit het logo en te wijzigen bij de bedrijfsgegevens. Controleer hem tegen
+  het briefpapier voordat er een offerte uitgaat.
 - **Offertescherm** (`/offertes`). Een overzicht met nummer, klant, aantal
   regels, totaal en status; een offerte aanmaken bij een klant; en een
   detailscherm met de regels en de totalen.

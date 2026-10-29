@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Lock } from 'lucide-react'
+import { ArrowLeft, FileDown, Lock } from 'lucide-react'
 import { formatEuro, type QuoteView, type ShippingMethod } from '@rgh/contracts'
 import { apiGet, ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -88,6 +88,15 @@ export default async function OffertePagina({ params }: { params: Promise<{ id: 
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href={`/api/quotes/${offerte.id}/pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 items-center gap-2 rounded border border-rule-strong bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-sunk"
+          >
+            <FileDown size={15} aria-hidden />
+            PDF
+          </a>
           {vast && (
             <Badge tone="rest">
               <Lock size={11} aria-hidden className="mr-1 inline" />

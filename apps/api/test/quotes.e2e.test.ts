@@ -39,6 +39,9 @@ describe('offertes', () => {
 
   const api = () => request(app.getHttpServer())
 
+  /** Hoeveel bladzijden de PDF telt. */
+  const paginas = (pdf: Buffer) => (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
     app = moduleRef.createNestApplication({ bodyParser: false })
@@ -81,6 +84,21 @@ describe('offertes', () => {
       where: { code: 'NL21' }, update: {},
       create: { code: 'NL21', name: 'Nederland 21%', percentage: 21, isDefault: true },
     })
+    // De PDF haalt de bedrijfsgegevens uit de instellingen; zonder die rijen
+    // valt hij terug op lege velden en dat zegt niets over het tekenwerk.
+    for (const [key, value] of Object.entries({
+      'company.name': 'Promohouse BV',
+      'company.street': 'Weegschaalstraat 5',
+      'company.postalCode': '7324 BE',
+      'company.city': 'Apeldoorn',
+      'company.phone': '055 578 88 05',
+      'company.email': 'info@promohouse.nl',
+      'company.accentColor': '#f26701',
+    })) {
+      await prisma.unscoped.setting.upsert({
+        where: { key }, update: {}, create: { key, value },
+      })
+    }
 
     supplierId = (await prisma.unscoped.supplier.create({
       data: { code: tag, name: `${tag} Leverancier` },
@@ -352,6 +370,76 @@ describe('offertes', () => {
       const res = await api().get(`/api/quotes/${offerte.id}`).set('Cookie', cookie).expect(200)
       expect(res.body.currentVersion.lockedAt).not.toBeNull()
       expect(res.body.currentVersion.sentAt).not.toBeNull()
+    })
+  })
+
+  describe('pdf', () => {
+    it('levert een echte PDF met het offertenummer in de bestandsnaam', async () => {
+      const offerte = await maakOfferte({ reference: 'PDF-test' })
+      await api().post(`/api/quotes/${offerte.id}/lines`).set('Cookie', cookie)
+        .send({ productId, quantity: 250, printOptionIds: [printOptionId], printColors: [1] })
+        .expect(201)
+
+      const res = await api()
+        .get(`/api/quotes/${offerte.id}/pdf`)
+        .set('Cookie', cookie)
+        .buffer(true)
+        .parse((response, cb) => {
+          const delen: Buffer[] = []
+          response.on('data', (d: Buffer) => delen.push(d))
+          response.on('end', () => cb(null, Buffer.concat(delen)))
+        })
+        .expect(200)
+
+      expect(res.headers['content-type']).toContain('application/pdf')
+      expect(res.headers['content-disposition']).toContain(`${offerte.number}.pdf`)
+
+      const inhoud = res.body as Buffer
+      // Een PDF begint met %PDF- en eindigt met %%EOF. Dat is de goedkoopste
+      // controle dat er werkelijk een document uitkomt en niet een lege body.
+      expect(inhoud.subarray(0, 5).toString()).toBe('%PDF-')
+      expect(inhoud.subarray(-6).toString()).toContain('%%EOF')
+      expect(inhoud.length).toBeGreaterThan(2000)
+
+      // Eén regel hoort op één bladzijde te passen. Deze telling staat er
+      // omdat het misging: tekst die onder de ondermarge komt laat pdfkit een
+      // nieuwe bladzijde beginnen, en de voettekst op die nieuwe bladzijde
+      // maakte er weer een. Zo werden het er zeven.
+      expect(paginas(inhoud)).toBe(1)
+    })
+
+    it('maakt ook een PDF van een offerte zonder regels', async () => {
+      // Een lege offerte is zeldzaam maar geen fout; hij mag niet omvallen.
+      const offerte = await maakOfferte({ reference: 'PDF-leeg' })
+
+      const res = await api()
+        .get(`/api/quotes/${offerte.id}/pdf`)
+        .set('Cookie', cookie)
+        .buffer(true)
+        .parse((response, cb) => {
+          const delen: Buffer[] = []
+          response.on('data', (d: Buffer) => delen.push(d))
+          response.on('end', () => cb(null, Buffer.concat(delen)))
+        })
+        .expect(200)
+
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-')
+    })
+
+    it('laat zonder quotes:view geen PDF ophalen', async () => {
+      const offerte = await maakOfferte()
+      const email = `${tag}-geen-pdf@test.local`
+      const zonder = await maakGebruikerMetWachtwoord(app, { email, name: 'Zonder', password: wachtwoord })
+      const login = await api().post('/api/auth/sign-in/email')
+        .send({ email, password: wachtwoord }).expect(200)
+      const andersCookie = ((login.headers['set-cookie'] as unknown as string[]) ?? [])
+        .map((c) => c.split(';')[0]).join('; ')
+
+      await api().get(`/api/quotes/${offerte.id}/pdf`).set('Cookie', andersCookie).expect(403)
+
+      await prisma.unscoped.session.deleteMany({ where: { userId: zonder.id } })
+      await prisma.unscoped.account.deleteMany({ where: { userId: zonder.id } })
+      await prisma.unscoped.user.deleteMany({ where: { id: zonder.id } })
     })
   })
 

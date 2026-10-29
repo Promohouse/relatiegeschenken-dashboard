@@ -65,6 +65,8 @@ export const quoteLineSchema = z.object({
   productId: z.string().nullable(),
   productArticleNumber: z.string().nullable(),
   productName: z.string(),
+  /** Kleur of maat van de gekozen variant, zoals vastgelegd bij aanmaak. */
+  variantDescription: z.string().nullable(),
   description: z.string().nullable(),
   supplierName: z.string().nullable(),
   quantity: z.number().int(),

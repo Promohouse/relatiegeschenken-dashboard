@@ -30,10 +30,20 @@ export const companySettingsSchema = z.object({
   slogan: z.string(),
   logoLight: z.string(),
   logoDark: z.string(),
+  accentColor: z.string(),
 })
 
 /** Lege waarden mogen: niet elk bedrijf heeft elk gegeven. */
 const tekst = (max = 200) => z.string().trim().max(max)
+
+/**
+ * De huisstijlkleur, als hexcode. Staat in de instellingen en niet in de
+ * code: op documenten moet hij overeenkomen met het briefpapier, en dat is
+ * geen reden voor een nieuwe versie van de software.
+ */
+const hexkleur = () =>
+  z.string().trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Een kleur ziet eruit als #f26701')
 
 export const updateCompanySettingsSchema = z.object({
   name: z.string({ error: 'Vul een bedrijfsnaam in' }).trim().min(2, 'Vul een bedrijfsnaam in').max(200),
@@ -76,6 +86,7 @@ export const updateCompanySettingsSchema = z.object({
   slogan: tekst(120),
   logoLight: tekst(300),
   logoDark: tekst(300),
+  accentColor: hexkleur(),
 })
 
 /**

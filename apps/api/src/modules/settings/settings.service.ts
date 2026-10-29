@@ -21,6 +21,7 @@ const BEDRIJFSVELDEN: Record<keyof CompanySettings, string> = {
   slogan: 'company.slogan',
   logoLight: 'company.logoLight',
   logoDark: 'company.logoDark',
+  accentColor: 'company.accentColor',
 }
 
 /**

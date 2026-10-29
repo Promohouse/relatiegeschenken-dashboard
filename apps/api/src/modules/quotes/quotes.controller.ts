@@ -1,4 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common'
+import {
+  Body, Controller, Delete, Get, Header, HttpCode, HttpStatus, Param, Patch, Post, Res,
+} from '@nestjs/common'
+import type { Response } from 'express'
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
   addQuoteLineSchema, calculateQuoteLineSchema, calculateTiersSchema, createQuoteSchema,
@@ -11,6 +14,7 @@ import { ZodValidationPipe } from '../../core/validation/zod-validation.pipe'
 import { schemaRef } from '../../core/openapi/schema-registry'
 import { CalculatorService } from './calculator.service'
 import { QuotesService } from './quotes.service'
+import { QuotePdfService } from './quote-pdf.service'
 import './quotes.schema'
 
 @ApiTags('offertes')
@@ -19,6 +23,7 @@ export class QuotesController {
   constructor(
     private readonly calculator: CalculatorService,
     private readonly quotes: QuotesService,
+    private readonly pdf: QuotePdfService,
   ) {}
 
   @Get()
@@ -40,6 +45,24 @@ export class QuotesController {
   @ApiCreatedResponse({ schema: schemaRef('Quote') })
   create(@Body(new ZodValidationPipe(createQuoteSchema)) body: CreateQuote) {
     return this.quotes.create(body)
+  }
+
+  @Get(':id/pdf')
+  @RequirePermission('quotes:view')
+  @Header('Content-Type', 'application/pdf')
+  @ApiOperation({
+    summary: 'De offerte als PDF',
+    description:
+      'Maakt de PDF op aanvraag met de teksten uit de sjablonen en de bedrijfsgegevens uit de ' +
+      'instellingen. Hij wordt niet opgeslagen: dat hoort bij verzenden, want dan wordt de ' +
+      'versie vastgezet en komt de controlewaarde van het document erbij.',
+  })
+  async pdfVanOfferte(@Param('id') id: string, @Res() res: Response) {
+    const { bestandsnaam, inhoud } = await this.pdf.render(id)
+    // Inline: een offerte wil je eerst bekijken. De bestandsnaam staat er wel
+    // bij, zodat opslaan het offertenummer oplevert en niet "download.pdf".
+    res.setHeader('Content-Disposition', `inline; filename="${bestandsnaam}"`)
+    res.send(inhoud)
   }
 
   @Get(':id')

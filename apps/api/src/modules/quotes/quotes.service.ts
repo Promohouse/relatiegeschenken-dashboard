@@ -121,6 +121,7 @@ export class QuotesService {
           productId: r.productId,
           productArticleNumber: r.productArticleNumber,
           productName: r.productName,
+          variantDescription: r.variantDescription,
           description: r.description,
           supplierName: r.supplierName,
           quantity: r.quantity,
