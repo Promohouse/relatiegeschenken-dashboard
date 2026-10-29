@@ -1501,6 +1501,10 @@ enum ConnectorTransport {
   REST
   SOAP
   XML_FEED
+  /// Een te downloaden JSON-bestand. Apart van XML_FEED omdat het verschil
+  /// er werkelijk toe doet: PF Concept biedt beide aan en wij kozen JSON
+  /// (ADR-0019), terwijl ANDA alleen XML levert.
+  JSON_FEED
   CSV_FEED
   SFTP
   FTP

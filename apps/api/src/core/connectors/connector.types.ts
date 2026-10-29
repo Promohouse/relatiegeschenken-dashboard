@@ -72,6 +72,20 @@ export interface CanonicalPrice {
   unitPrice: string
   validUntil: Date | null
   tiers: { minimumQuantity: number; unitPrice: string }[]
+  /**
+   * Minimum aantal voor bedrukken. Onder dit aantal rekent de leverancier een
+   * toeslag; die staat bij de drukprijzen als `ltmCharge`.
+   *
+   * Staat hier en niet bij de drukgegevens omdat PF Concept het in de
+   * prijsfeed levert, per artikel. Null betekent: de leverancier zegt er
+   * niets over.
+   */
+  minDecoQuantity?: number | null
+  /**
+   * De drukcodes die voor dit artikel gelden, als de leverancier ze bij de
+   * prijs levert. Verwijzen naar de codes in de drukprijslijst.
+   */
+  printCodes?: string[]
 }
 
 /** Een bedrukpositie op een artikel, met wat daar technisch kan. */
@@ -122,6 +136,51 @@ export interface CanonicalPrintPrices {
   }[]
 }
 
+/**
+ * Eén regel uit een drukprijslijst die al een staffel ís.
+ *
+ * Dit staat naast `CanonicalPrintPrices` en niet in plaats daarvan, omdat
+ * leveranciers hun drukprijzen werkelijk anders opbouwen. midocean en ANDA
+ * geven een prijs*structuur* die pas uitgerekend kan worden als het
+ * logoformaat bekend is (ADR-0016). PF Concept geeft een opzoektabel over
+ * formaat, kleuren en aantal, en die is wél vooraf plat te slaan.
+ *
+ * Eén vorm voor beide zou betekenen dat de ene leverancier zich voordoet als
+ * de andere, en dat is precies hoe je verkeerde prijzen krijgt.
+ */
+export interface CanonicalPrintPriceTier {
+  /** Drukcode, verwijst naar `printCodes` bij de prijs en bij de drukdata. */
+  printCode: string
+  /** Oppervlak waarvoor deze regel geldt; 0 betekent: formaat doet niet mee. */
+  logoSizeCm2: number
+  /** Aantal kleuren; 0 betekent: aantal kleuren doet niet mee (fullcolour). */
+  colors: number
+  minQuantity: number
+  unitPrice: string
+  setupCost: string
+}
+
+export interface CanonicalPrintPriceList {
+  currency: string
+  methods: {
+    printCode: string
+    /** Omschrijving van de techniek zoals de leverancier hem noemt. */
+    description: string | null
+    /**
+     * Toeslag bij bedrukken onder het minimum bedrukkingsaantal. Null als de
+     * leverancier het begrip niet kent.
+     */
+    ltmCharge: string | null
+    /**
+     * Waarvan de prijs afhangt, in de woorden van de leverancier. Bewust als
+     * ruwe tekst: welke waarden PF Concept hier gebruikt is nog niet
+     * bevestigd, en een aanname zou hier een verkeerde prijs opleveren.
+     */
+    priceDependence: string | null
+  }[]
+  tiers: CanonicalPrintPriceTier[]
+}
+
 /** Voorraad per variant, met de eerstvolgende verwachte leveringen. */
 export interface CanonicalStock {
   sku: string
@@ -167,6 +226,11 @@ export interface SupplierConnector {
   fetchStock?(context: ConnectorContext): Promise<FetchedRecord<CanonicalStock>[]>
   fetchPrintData?(context: ConnectorContext): Promise<FetchedRecord<CanonicalPrintData>[]>
   fetchPrintPrices?(context: ConnectorContext): Promise<CanonicalPrintPrices>
+  /**
+   * Voor leveranciers die hun drukprijzen als opzoektabel leveren. Een
+   * connector implementeert dit óf `fetchPrintPrices`, niet allebei.
+   */
+  fetchPrintPriceTiers?(context: ConnectorContext): Promise<CanonicalPrintPriceList>
 }
 
 /**

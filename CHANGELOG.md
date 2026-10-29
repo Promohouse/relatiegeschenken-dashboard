@@ -11,6 +11,21 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   zegt waar de prijs vandaan komt — prijsregel, klantafspraak of handmatig —
   en wat de werkelijke marge is. Er wordt niets opgeslagen: een calculatie is
   een vraag, geen handeling.
+- **PF Concept-connector** (`pfconcept-feed`). Leest hun datafeeds v3 in JSON:
+  catalogus, prijzen, voorraad, drukgegevens en drukprijzen, met de
+  bestandsnamen per taal, afdeling en assortiment. Nog niet tegen echte
+  bestanden gedraaid - de feeds zijn niet geactiveerd - maar wel getest tegen
+  de voorbeelden uit hun eigen handleiding v3.6.7 (ADR-0019).
+- De connectorlaag kent nu twee soorten drukprijslijst. midocean en ANDA geven
+  een prijs*structuur* die pas uit te rekenen is als het logoformaat bekend is
+  (ADR-0016); PF Concept geeft een opzoektabel die vooraf plat te slaan is.
+  Eén vorm voor allebei zou betekenen dat de ene leverancier zich voordoet als
+  de andere.
+- De geseede koppelingen voor PF Concept en ANDA stonden nog op aannames uit
+  het vooronderzoek. Ze volgen nu de handleidingen: PF Concept leest JSON en
+  niet XML, ANDA leest feeds en geen REST, en bestellen staat bij beide uit.
+  De oude PF-aanname blijft als vervallen regel staan, zodat zichtbaar is dat
+  hij bestond.
 - **Marges in te stellen** (`/beheer/marges`). Een standaardmarge voor alles,
   en afwijkende regels per klant of per product. Elke regel heeft een marge op
   het artikel én een eigen marge op de bedrukking; laat je die laatste leeg,

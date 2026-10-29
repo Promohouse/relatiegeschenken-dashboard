@@ -10,6 +10,7 @@
  *
  * De seed is idempotent: nogmaals draaien levert hetzelfde resultaat.
  */
+import type { ConnectorCapability, ConnectorTransport } from '../src/index'
 import {
   createPrismaClient,
   issueNumber,
@@ -874,7 +875,7 @@ async function seedDemoQuotesAndOrders(users: { id: string; email: string }[]) {
  * klaar, maar kan niemand denken dat er al data binnenkomt.
  */
 interface CapabilityDefinition {
-  capability: 'CATALOG' | 'MEDIA' | 'PRICE_TIERS' | 'INVENTORY' | 'PLACE_ORDER' | 'ORDER_STATUS' | 'SHIPPING'
+  capability: ConnectorCapability
   priority: number
   /** Cron-uitdrukking; leeg betekent alleen handmatig of op gebeurtenis. */
   schedule?: string
@@ -889,7 +890,7 @@ interface ConnectionDefinition {
   supplier: string
   key: string
   connectorKey: string
-  transport: 'REST' | 'SOAP' | 'XML_FEED' | 'CSV_FEED' | 'SFTP' | 'FTP' | 'FILE_UPLOAD'
+  transport: ConnectorTransport
   notes: string
   capabilities: CapabilityDefinition[]
 }
@@ -899,31 +900,58 @@ async function seedConnections() {
 
   const definitions: ConnectionDefinition[] = [
     {
+      // Stond hier op basis van het vooronderzoek, voordat de handleiding er
+      // was. Blijft staan zodat zichtbaar is dat die aanname bestond, maar
+      // de koppeling heet nu pfconcept-feed en leest JSON (ADR-0019).
       supplier: 'PFCONCEPT', key: 'pfconcept-xml', connectorKey: 'pfconcept-xml', transport: 'XML_FEED',
-      notes: 'Product-, Price-, Print- en Decoration-XML plus afbeeldingen, dagelijks.',
+      notes:
+        'VERVALLEN. Geraden op basis van openbare bronnen. De echte koppeling is pfconcept-feed; ' +
+        'zie docs/leveranciers/pf-concept.md en ADR-0019.',
+      capabilities: [],
+    },
+    {
+      supplier: 'PFCONCEPT', key: 'pfconcept-feed', connectorKey: 'pfconcept-feed',
+      transport: 'JSON_FEED',
+      notes:
+        'Datafeeds v3 in JSON volgens handleiding v3.6.7. Prijs-, drukprijs- en voorraadfeed ' +
+        'vragen activering per account en krijgen een unieke code in de bestandsnaam; die code ' +
+        'is contractueel vertrouwelijk (artikel 11 van hun voorwaarden) en hoort versleuteld in ' +
+        'de credentials. Zie docs/leveranciers/pf-concept.md en ADR-0019.',
       capabilities: [
-        { capability: 'CATALOG', priority: 10, schedule: '0 3 * * *' },
-        { capability: 'PRICE_TIERS', priority: 10, schedule: '0 3 * * *' },
-        { capability: 'MEDIA', priority: 10, schedule: '30 3 * * *' },
-        { capability: 'INVENTORY', priority: 50, schedule: '0 7,15 * * *' },
+        // De tijden volgen hun updatemomenten plus een uur: product 05:00,
+        // print data 06:00, voorraad 02:00 en 13:00, prijzen zaterdag 14:00.
+        // Eerder ophalen levert het bestand van gisteren op.
+        { capability: 'CATALOG', priority: 10, schedule: '0 6 * * *' },
+        { capability: 'MEDIA', priority: 10, schedule: '30 6 * * *' },
+        { capability: 'PRINT_DATA', priority: 10, schedule: '0 7 * * *' },
+        { capability: 'PRICE_TIERS', priority: 10, schedule: '0 15 * * 6' },
+        { capability: 'INVENTORY', priority: 10, schedule: '0 3,14 * * *' },
       ],
     },
     {
       supplier: 'PFCONCEPT', key: 'pfconcept-gateway', connectorKey: 'pfconcept-gateway', transport: 'REST',
-      notes: 'Gateway voor het plaatsen van orders en het ophalen van de status.',
+      notes:
+        'Gateway Web Service v2.2.2: orders plaatsen, orderstatus, ASN en drukproeven. ' +
+        'Gedocumenteerd en uit - bestellen gaat buiten het platform om (harde regel 13). ' +
+        'Zie ADR-0019.',
       capabilities: [
-        { capability: 'PLACE_ORDER', priority: 10 },
-        { capability: 'ORDER_STATUS', priority: 10, schedule: '0 8,16 * * *' },
+        { capability: 'PLACE_ORDER', priority: 10, enabled: false },
+        { capability: 'ORDER_STATUS', priority: 10, enabled: false },
       ],
     },
     {
-      supplier: 'ANDA', key: 'anda-rest', connectorKey: 'anda-rest', transport: 'REST',
-      notes: 'REST plus feeds voor product, prijs, voorraad, labeling info en labeling price.',
+      supplier: 'ANDA', key: 'anda-rest', connectorKey: 'anda-xml', transport: 'XML_FEED',
+      notes:
+        'XML-feeds volgens handleiding v3.2: product, prijs, voorraad, labeling, labeling price ' +
+        'en unieke prijzen. Toegang via een geheime URL plus IP-whitelisting; de REST API van ' +
+        'ANDA is uitsluitend een Order API en wordt niet gebruikt. Zie docs/leveranciers/anda.md ' +
+        'en ADR-0018. Connector nog niet gebouwd.',
       capabilities: [
-        { capability: 'CATALOG', priority: 10, schedule: '0 3 * * *' },
-        { capability: 'PRICE_TIERS', priority: 10, schedule: '0 3 * * *' },
-        { capability: 'INVENTORY', priority: 10, schedule: '0 * * * *' },
-        { capability: 'PLACE_ORDER', priority: 10 },
+        { capability: 'CATALOG', priority: 10, schedule: '0 6 * * *' },
+        { capability: 'PRICE_TIERS', priority: 10, schedule: '0 7 * * 0' },
+        { capability: 'PRINT_DATA', priority: 10, schedule: '0 8 * * *' },
+        { capability: 'INVENTORY', priority: 10, schedule: '0 6,18 * * *' },
+        { capability: 'PLACE_ORDER', priority: 10, enabled: false },
       ],
     },
     {
@@ -980,7 +1008,7 @@ async function seedConnections() {
     const supplier = await prisma.supplier.findUniqueOrThrow({ where: { code: def.supplier } })
     const connection = await prisma.supplierConnection.upsert({
       where: { key: def.key },
-      update: { notes: def.notes, transport: def.transport },
+      update: { notes: def.notes, transport: def.transport, connectorKey: def.connectorKey },
       create: {
         supplierId: supplier.id,
         key: def.key,
