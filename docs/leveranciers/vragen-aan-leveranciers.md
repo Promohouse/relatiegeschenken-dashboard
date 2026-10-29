@@ -5,8 +5,10 @@ die **de prijs raken** - die horen beantwoord te zijn voordat er een
 drukprijs aan een klant getoond wordt - en daarna de vragen die het bouwen
 makkelijker maken.
 
-Taal: midocean en PF Concept zijn Nederlandse bedrijven, ANDA is Hongaars en
-hun documentatie is Engels.
+Taal: alle drie in het Nederlands, op verzoek van de opdrachtgever. ANDA is
+een Hongaars bedrijf en hun handleiding is Engels, dus als de contactpersoon
+daar geen Nederlands leest kan de Engelse versie opgevraagd worden - de
+veldnamen staan er sowieso in het Engels in, want zo heten ze in de feed.
 
 Werkwijze: zodra een antwoord binnen is, gaat het naar het document van die
 leverancier ([midocean.md](midocean.md), [anda.md](anda.md),
@@ -78,65 +80,69 @@ drukprijslijst
 
 ## 2. ANDA Present
 
-**Onderwerp:** XML feed activation and a few questions about the manual (v3.2)
+**Onderwerp:** Activering XML-feeds en een aantal vragen over handleiding v3.2
 
-> Dear [name],
+> Beste [naam],
 >
-> We are building an integration with your XML feeds, based on the *ANDA WEB
-> CUSTOMER EN XML and CSV feed manual* version 3.2. Could you help us with the
-> following?
+> Wij bouwen een koppeling met jullie XML-feeds, op basis van de *ANDA WEB
+> CUSTOMER EN XML and CSV feed manual* versie 3.2. Kunnen jullie ons met het
+> volgende helpen?
 >
-> **Activation**
+> **Activering**
 >
-> 1. Could you activate our XML feed access? Our static IP address is
->    [IP-ADRES]. Please let us know the unique XML IDs for the product, price,
->    inventory, labeling, printing price, unique product prices, category and
->    Pantone feeds. We would like the product, category, labeling and printing
->    time feeds in Dutch (`nl`).
-> 2. Is a test or staging environment available for the feeds, or only the
->    live files?
+> 1. Kunnen jullie onze toegang tot de XML-feeds activeren? Ons vaste
+>    IP-adres is [IP-ADRES]. Graag ontvangen wij de unieke XML-id's voor de
+>    feeds product, price, inventory, labeling, printing price, unique product
+>    prices, category en Pantone. De feeds product, category, labeling en
+>    printing time graag in het Nederlands (`nl`).
+> 2. Is er een test- of acceptatieomgeving voor de feeds, of alleen de
+>    live-bestanden?
 >
-> **Printing prices** *(these affect the prices we quote, so we would like to
-> be certain)*
+> **Drukprijzen** *(dit raakt de prijzen die wij offreren, dus hier willen we
+> zeker van zijn)*
 >
-> 3. For area-based technologies, the labeling feed gives us a technology code
->    such as `UVA`, while the printing price feed contains `UVA1`, `UVA2` …
->    `UVA+`. We determine the imprint area from the requested logo size and
->    then select the matching code using `SizeFrom`/`SizeTo`. Is that the
->    intended way?
-> 4. For **VS (vinyl sticker)** the manual mentions "a separate price per piece
->    for gluing". That price is not in the feed. Where do we find it, and how
->    is it applied?
-> 5. For **DO (doming)** and **SU (sublimation)** the manual says the price
->    group depends on the sticker size and the print size. How do we determine
->    which price group applies from the feed data?
-> 6. For **BR (embroidery)** no price is loaded. Is that still the case? We
->    will show a warning rather than calculate a price.
+> 3. Bij technieken die per oppervlak rekenen geeft de labeling feed een
+>    techniekcode als `UVA`, terwijl in de printing price feed `UVA1`, `UVA2`
+>    … `UVA+` staan. Wij bepalen het drukoppervlak en kiezen daarmee de
+>    bijbehorende code via `SizeFrom`/`SizeTo`. Is dat de bedoelde werkwijze?
+> 4. Bij **VS (vinylsticker)** noemt de handleiding "a separate price per
+>    piece for gluing". Die prijs staat niet in de feed. Waar vinden wij hem,
+>    en hoe wordt hij toegepast?
+> 5. Bij **DO (doming)** en **SU (sublimatie)** staat dat de prijsgroep
+>    afhangt van respectievelijk het stickerformaat en het drukformaat. Hoe
+>    bepalen wij uit de feedgegevens welke prijsgroep geldt?
+> 6. Bij **BR (borduren)** is geen prijs in het systeem geladen. Klopt het dat
+>    dat zo blijft? Wij tonen dan een melding in plaats van een prijs te
+>    berekenen.
 >
-> **Contradictions in the manual**
+> **Tegenstrijdigheden in de handleiding**
 >
-> The overview table on page 4 and the individual chapters give different
-> update moments. Which is correct?
+> De overzichtstabel op bladzijde 4 en de losse hoofdstukken geven
+> verschillende updatemomenten. Welke is juist?
 >
-> | Feed | Table, page 4 | Chapter |
+> | Feed | Tabel, blz. 4 | Hoofdstuk |
 > |---|---|---|
-> | Category | twice a day, 07:30 and 21:30 | twice a day, 07:10 and 21:10 (p. 23) |
-> | Printing price | weekly, Saturday 09:00 | every day 18:00 when updated (p. 27) |
-> | Unique product prices | weekly, Saturday 09:00 | once a day, 18:00 (p. 22) |
+> | Category | 2× per dag, 07:30 en 21:30 | 2× per dag, 07:10 en 21:10 (blz. 23) |
+> | Printing price | wekelijks, zaterdag 09:00 | dagelijks 18:00 bij een wijziging (blz. 27) |
+> | Unique product prices | wekelijks, zaterdag 09:00 | dagelijks 18:00 (blz. 22) |
 >
-> **Practical**
+> **Praktisch**
 >
-> 7. Is an XSD or other schema available for the XML feeds?
-> 8. Is there a delta or change feed, or do we always need to download the
->    full file (30-40 MB for products)?
-> 9. Are there rate limits or a maximum number of downloads per day?
-> 10. `assemblyProduct` marks a part of an assembled product. How do we
->     recognise the assembled product itself, so we do not list parts as
->     separate sellable items?
+> 7. Is er een XSD of ander schema beschikbaar voor de XML-feeds?
+> 8. Is er een delta- of wijzigingsfeed, of moet steeds het volledige bestand
+>    opgehaald worden (30-40 MB voor producten)?
+> 9. Gelden er rate limits of een maximum aantal ophaalacties per dag?
+> 10. `assemblyProduct` markeert een onderdeel van een samengesteld artikel.
+>     Hoe herkennen wij het samengestelde artikel zelf, zodat wij geen losse
+>     onderdelen als verkoopbaar artikel tonen?
+> 11. In de price feed ontbreken artikelen met een eigen prijsafspraak; die
+>     staan in de unique product prices feed. Klopt het dat de prijs in die
+>     tweede feed de bedrukking al bevat, en dat wij daar dus géén drukprijs
+>     bovenop mogen rekenen?
 >
-> Thank you in advance. Kind regards,
+> Alvast dank. Met vriendelijke groet,
 >
-> [name] — Promohouse BV, the Netherlands
+> [naam] — Promohouse BV
 
 ---
 
