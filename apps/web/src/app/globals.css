@@ -3,6 +3,10 @@
 /**
  * Rustig en zakelijk, zoals de opdracht vraagt. Neutralen met een lichte
  * groenzweem naar het accent toe, zodat het geen standaard grijs is.
+ *
+ * De donkere variant staat verderop. Belangrijk: componenten gebruiken altijd
+ * een token en nooit een kleur rechtstreeks, anders klopt er in één van de
+ * twee weergaven iets niet.
  */
 @theme {
   --color-ground: #f4f6f3;
@@ -26,10 +30,99 @@
   --color-alarm-bg: #f7e4e1;
 }
 
+/*
+ * Donkere weergave.
+ *
+ * Twee blokken met dezelfde inhoud, en dat moet ook zo blijven: het eerste
+ * geldt als iemand donker heeft gekozen, het tweede als hij de keuze aan zijn
+ * besturingssysteem overlaat. `:not([data-theme='light'])` zorgt ervoor dat
+ * een bewuste keuze voor licht wint van een donker besturingssysteem.
+ *
+ * Er is een test die controleert dat beide blokken gelijk zijn; zie
+ * test/thema.test.ts.
+ *
+ * Geen omgekeerde grijzen maar iets warmers: puur zwart met wit erop is op een
+ * scherm 's avonds vermoeiend. Het accent is lichter dan in de dag-variant,
+ * want het donkere groen van overdag is op een donkere ondergrond niet te
+ * lezen.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-ground: #141715;
+  --color-surface: #1c201e;
+  --color-sunk: #252a27;
+  --color-ink: #e8ebe7;
+  --color-ink-soft: #a8b2ac;
+  --color-ink-faint: #7b857f;
+  --color-rule: #2e3431;
+  --color-rule-strong: #434a46;
+  --color-accent: #6ab58c;
+  --color-accent-soft: #223029;
+
+  --color-ok: #6ab58c;
+  --color-ok-bg: #1d2a23;
+  --color-wait: #d9ab5a;
+  --color-wait-bg: #2c2518;
+  --color-rest: #98a29c;
+  --color-rest-bg: #262b28;
+  --color-alarm: #e2897c;
+  --color-alarm-bg: #2e1d1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --color-ground: #141715;
+    --color-surface: #1c201e;
+    --color-sunk: #252a27;
+    --color-ink: #e8ebe7;
+    --color-ink-soft: #a8b2ac;
+    --color-ink-faint: #7b857f;
+    --color-rule: #2e3431;
+    --color-rule-strong: #434a46;
+    --color-accent: #6ab58c;
+    --color-accent-soft: #223029;
+
+    --color-ok: #6ab58c;
+    --color-ok-bg: #1d2a23;
+    --color-wait: #d9ab5a;
+    --color-wait-bg: #2c2518;
+    --color-rest: #98a29c;
+    --color-rest-bg: #262b28;
+    --color-alarm: #e2897c;
+    --color-alarm-bg: #2e1d1a;
+  }
+}
+
 html,
 body {
   background: var(--color-ground);
   color: var(--color-ink);
+}
+
+/*
+ * Het logo wisselt mee met de weergave. Twee bestanden en geen gefilterd
+ * logo: het oranje vlaggetje moet in beide gevallen oranje blijven, alleen de
+ * zwarte letters worden wit.
+ */
+.logo-op-donker {
+  display: none;
+}
+
+:root[data-theme='dark'] .logo-op-licht {
+  display: none;
+}
+:root[data-theme='dark'] .logo-op-donker {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .logo-op-licht {
+    display: none;
+  }
+  :root:not([data-theme='light']) .logo-op-donker {
+    display: block;
+  }
 }
 
 /* Cijfers in kolommen moeten uitlijnen. */

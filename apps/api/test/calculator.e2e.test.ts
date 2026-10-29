@@ -117,9 +117,11 @@ describe('offertecalculator', () => {
     variantId = product.variants[0].id
     printOptionId = product.printOptions[0].id
 
-    // Een algemene margeregel van 110%: dat is de demo-instelling.
+    // Een margeregel van 110% op dit ene product, en bewust niet GLOBAL:
+    // een algemene regel geldt voor elk artikel in de database en verstoort
+    // dan tests die juist bewijzen dat er zonder regel geen prijs is.
     regelId = (await prisma.unscoped.priceRule.create({
-      data: { scope: 'GLOBAL', marginPercent: '110.00', priority: 1000 },
+      data: { scope: 'PRODUCT', productId: product.id, marginPercent: '110.00', priority: 1000 },
     })).id
   }, 60000)
 
@@ -203,8 +205,8 @@ describe('offertecalculator', () => {
   })
 
   it('weigert een bedrukoptie van een ander product', async () => {
-    // Mét leverancier, anders struikelt de calculatie al eerder over het
-    // ontbreken van een inkoopprijs en bewijst deze test niets.
+    // Mét leverancier én een eigen prijsregel, anders struikelt de calculatie
+    // al eerder over een ontbrekende prijs en bewijst deze test niets.
     const ander = await prisma.unscoped.product.create({
       data: {
         articleNumber: `${tag}-9999`,
@@ -212,11 +214,16 @@ describe('offertecalculator', () => {
         suppliers: { create: [{ supplierId, supplierArticleNumber: `A-${tag}`, purchasePrice: '2.0000' }] },
       },
     })
+    const anderRegelId = (await prisma.unscoped.priceRule.create({
+      data: { scope: 'PRODUCT', productId: ander.id, marginPercent: '110.00', priority: 1000 },
+    })).id
     const res = await api()
       .post('/api/quotes/calculate').set('Cookie', cookie)
       .send({ productId: ander.id, quantity: 10, printOptionIds: [printOptionId] })
       .expect(422)
     expect(res.body.error.message).toContain('hoort niet bij dit product')
+
+    await prisma.unscoped.priceRule.deleteMany({ where: { id: anderRegelId } })
   })
 
   it('herberekent de marge bij een handmatige prijs', async () => {
@@ -412,6 +419,7 @@ describe('offertecalculator', () => {
   })
 
   it('weigert te rekenen zonder prijsregel', async () => {
+    // Een ander product, dus zonder de productregel hierboven.
     const kaal = await prisma.unscoped.product.create({
       data: {
         articleNumber: `${tag}-8888`,
@@ -419,16 +427,12 @@ describe('offertecalculator', () => {
         suppliers: { create: [{ supplierId, supplierArticleNumber: `X-${tag}`, purchasePrice: '2.0000' }] },
       },
     })
-    await prisma.unscoped.priceRule.update({ where: { id: regelId }, data: { isActive: false } })
-    try {
-      const res = await api()
-        .post('/api/quotes/calculate').set('Cookie', cookie)
-        .send({ productId: kaal.id, quantity: 10 })
-        .expect(422)
-      expect(res.body.error.message).toContain('geen prijsregel')
-    } finally {
-      await prisma.unscoped.priceRule.update({ where: { id: regelId }, data: { isActive: true } })
-    }
+
+    const res = await api()
+      .post('/api/quotes/calculate').set('Cookie', cookie)
+      .send({ productId: kaal.id, quantity: 10 })
+      .expect(422)
+    expect(res.body.error.message).toContain('geen prijsregel')
   })
 
   it('laat zonder quotes:view niet rekenen', async () => {

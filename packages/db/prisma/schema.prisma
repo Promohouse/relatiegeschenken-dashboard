@@ -196,6 +196,14 @@ enum MediaRole {
 
 // --- Identiteit en rechten -------------------------------------------------
 
+/// Lichte of donkere weergave van het dashboard.
+enum ThemePreference {
+  /// Volgt de instelling van het besturingssysteem.
+  SYSTEM
+  LIGHT
+  DARK
+}
+
 model User {
   id          String    @id @default(uuid()) @db.Uuid
   email       String    @unique
@@ -211,6 +219,11 @@ model User {
   image            String?
   /// Vervangt het eerdere mfaEnabled: één vlag, beheerd door de tweefactor-plugin.
   twoFactorEnabled Boolean? @default(false)
+
+  /// Lichte of donkere weergave. Een persoonlijke voorkeur, geen
+  /// systeeminstelling: wie 's avonds werkt wil iets anders dan wie overdag
+  /// werkt, en dat verschilt per medewerker.
+  themePreference ThemePreference @default(SYSTEM)
 
   /// Gevuld bij een klantgebruiker (portaal). Leeg bij een interne medewerker.
   /// De Prisma-extensie dwingt af dat portaalsessies alleen eigen data zien.

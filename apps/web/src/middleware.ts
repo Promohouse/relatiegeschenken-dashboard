@@ -22,5 +22,16 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  /**
+   * Alles behalve de api, de bestanden van Next en losse bestanden uit
+   * `public`. Dat laatste is `.*\\..*`: een pad met een punt erin is een
+   * bestand en geen pagina.
+   *
+   * Zonder die uitzondering stuurt deze middleware ook het ophalen van een
+   * afbeelding naar het inlogscherm. De beeldoptimalisatie van Next haalt het
+   * bronbestand namelijk zelf op, zonder sessiecookie, en krijgt dan een
+   * omleiding in plaats van een plaatje - met als resultaat dat het logo niet
+   * verschijnt terwijl de pagina verder klopt.
+   */
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'],
 }

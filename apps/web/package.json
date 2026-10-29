@@ -8,7 +8,8 @@
     "start": "dotenv -e ../../.env -- next start --port 3100",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test": "vitest run"
   },
   "dependencies": {
     "@rgh/contracts": "*",

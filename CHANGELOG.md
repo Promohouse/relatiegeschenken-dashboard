@@ -251,6 +251,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- **De middleware stuurde ook afbeeldingen naar het inlogscherm.** De
+  beeldoptimalisatie van Next haalt een bronbestand zelf op, zonder
+  sessiecookie, en kreeg dan een omleiding in plaats van een plaatje. Het
+  logo verscheen daardoor niet, terwijl de pagina verder klopte. Bestanden uit
+  `public` lopen nu buiten de middleware om.
+- **De seed koos "het eerste demoproduct" uit een query zonder sortering.** Na
+  de echte import veranderde die volgorde, en maakte een tweede seedronde
+  dezelfde demo-prijsafspraken op een ander product aan. De demoquery's
+  sorteren nu op artikelnummer.
 - **Drie fouten in de drukprijsberekening, gevonden door de echte prijslijst
   te vergelijken met de handleiding.** Alle drie zouden ze een verkeerde prijs
   hebben gegeven: de indicator voor een goedkopere vervolgkleur blijkt

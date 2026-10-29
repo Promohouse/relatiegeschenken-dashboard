@@ -104,11 +104,28 @@ async function seedBaseData() {
     await prisma.vatRate.upsert({ where: { code: r.code }, update: r, create: r })
   }
 
+  // Bedrijfsgegevens staan als instelling en niet in de code: ze komen op
+  // offertes, orderbevestigingen en facturen, en een verhuizing of een nieuw
+  // rekeningnummer hoort geen nieuwe versie van de software te vragen.
   const settings = [
     { key: 'vat.rounding', value: 'PER_LINE_2_DECIMALS', description: 'Btw per orderregel afronden op twee decimalen (ADR-0005).' },
     { key: 'vat.defaultCode', value: 'NL21', description: 'Standaard btw-tarief voor nieuwe orderregels.' },
-    { key: 'company.name', value: 'Relatiegeschenken Hub', description: 'Naam zoals op documenten.' },
     { key: 'demo.enabled', value: true, description: 'Toont de demodata-waarschuwing in de interface.' },
+
+    { key: 'company.name', value: 'Promohouse BV', description: 'Naam zoals op documenten.' },
+    { key: 'company.street', value: 'Weegschaalstraat 5', description: 'Straat en huisnummer.' },
+    { key: 'company.postalCode', value: '7324 BE', description: 'Postcode.' },
+    { key: 'company.city', value: 'Apeldoorn', description: 'Plaats.' },
+    { key: 'company.country', value: 'Nederland', description: 'Land.' },
+    { key: 'company.phone', value: '055 578 88 05', description: 'Telefoonnummer.' },
+    { key: 'company.email', value: 'info@promohouse.nl', description: 'E-mailadres voor klanten.' },
+    { key: 'company.website', value: 'www.promohouse.nl', description: 'Website.' },
+    { key: 'company.chamberOfCommerce', value: '08079411', description: 'KvK-nummer.' },
+    { key: 'company.vatNumber', value: 'NL815249135B01', description: 'Btw-identificatienummer.' },
+    { key: 'company.iban', value: 'NL39RABO0172495423', description: 'Rekeningnummer voor facturen.' },
+    { key: 'company.slogan', value: 'verrassend anders', description: 'Zin onder het logo op documenten.' },
+    { key: 'company.logoLight', value: '/merk/promohouse-donker.png', description: 'Logo voor een lichte ondergrond.' },
+    { key: 'company.logoDark', value: '/merk/promohouse-licht.png', description: 'Logo voor een donkere ondergrond.' },
   ]
   for (const s of settings) {
     await prisma.setting.upsert({
@@ -408,6 +425,10 @@ async function seedDemoQuotesAndOrders(users: { id: string; email: string }[]) {
 
   const products = await prisma.product.findMany({
     where: { isDemo: true },
+    // Vaste volgorde: zonder sortering hangt "het eerste demoproduct" af van
+    // wat de database toevallig teruggeeft, en dan maakt een tweede seedronde
+    // dezelfde demogegevens op een ander product aan.
+    orderBy: { articleNumber: 'asc' },
     include: { suppliers: { include: { supplier: true } }, printOptions: { include: { printMethod: true } } },
   })
 
@@ -921,7 +942,11 @@ async function seedChannels() {
     create: { key: 'webshop', name: 'Eigen webshop', type: 'PUBLIC', ...demo },
   })
 
-  const products = await prisma.product.findMany({ where: { isDemo: true }, select: { id: true } })
+  const products = await prisma.product.findMany({
+    where: { isDemo: true },
+    orderBy: { articleNumber: 'asc' },
+    select: { id: true },
+  })
   for (const [i, product] of products.entries()) {
     await prisma.channelAssortmentItem.upsert({
       where: { channelId_productId: { channelId: channel.id, productId: product.id } },
