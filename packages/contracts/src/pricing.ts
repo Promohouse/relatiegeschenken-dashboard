@@ -277,6 +277,28 @@ export function applyPriceRule(purchasePrice: Decimal.Value, rule: PriceRule): D
   return round4(prijs)
 }
 
+/**
+ * De marge die deze regel op dit artikel zou opleveren, als deel van de
+ * verkoopprijs.
+ *
+ * Nadrukkelijk de marge die de regel *geeft* en niet het percentage dat erin
+ * staat: een regel kan naast een percentage ook een vast opslagbedrag hebben,
+ * en dan is het percentage alleen niet het hele verhaal.
+ *
+ * Hiermee kan het drukwerk de normale marge houden wanneer de artikelprijs
+ * ergens anders vandaan komt - een klantprijsafspraak of een handmatig
+ * bedrag. Zie ADR-0017.
+ */
+export function ruleSaleMarginPercent(
+  purchasePrice: Decimal.Value,
+  rule: PriceRule,
+): Decimal {
+  const inkoop = new Decimal(purchasePrice)
+  const verkoop = applyPriceRule(inkoop, rule)
+  if (verkoop.isZero()) return new Decimal(0)
+  return round4(verkoop.minus(inkoop).dividedBy(verkoop).times(100))
+}
+
 interface PriceResultBasis {
   unitPrice: Decimal
   purchasePrice: Decimal

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
-  applicableRules, calculateUnitSalePrice, selectPrintMarginPercent, selectTier,
+  applicableRules, calculateUnitSalePrice, ruleSaleMarginPercent,
+  selectPriceRule, selectPrintMarginPercent, selectTier,
   type PriceContext, type PriceRule, type PriceResult, type CustomerPriceAgreement,
 } from '@rgh/contracts'
 import { PrismaService } from '../prisma/prisma.service'
@@ -36,6 +37,12 @@ export type PriceBreakdown = PriceResult & {
    * Null is geen nul: het betekent "volg de marge op het artikel".
    */
   printMarginPercent: string | null
+  /**
+   * De marge die de margeregel op dit artikel geeft, ook wanneer een
+   * klantprijsafspraak de prijs overneemt. Dit is de "normale marge" die het
+   * drukwerk aanhoudt als er niets anders is ingesteld.
+   */
+  ruleMarginPercent: string | null
   /** Alle regels die golden, op volgorde. Maakt navraagbaar waarom deze prijs. */
   consideredRuleIds: string[]
 }
@@ -112,6 +119,8 @@ export class PricingService {
     // Los van de afspraak: die gaat over de prijs van het artikel, niet over
     // wat bedrukken kost.
     const drukmarge = selectPrintMarginPercent(regels, context)
+    const regel = selectPriceRule(regels, context)
+    const regelmarge = regel ? ruleSaleMarginPercent(inkoopprijs, regel) : null
 
     if (!uitkomst) {
       throw new PreconditionError(
@@ -129,6 +138,7 @@ export class PricingService {
       supplierName: leverancier.supplier.name,
       tierMinQuantity: staffel?.minQuantity ?? null,
       printMarginPercent: drukmarge === null ? null : drukmarge.toFixed(2),
+      ruleMarginPercent: regelmarge === null ? null : regelmarge.toFixed(2),
       consideredRuleIds: applicableRules(regels, context).map((r) => r.id),
     }
   }

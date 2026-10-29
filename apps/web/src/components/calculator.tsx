@@ -53,6 +53,8 @@ export function Calculator({
   const [manueel, setManueel] = useState('')
   const [korting, setKorting] = useState('0')
   const [drukMarge, setDrukMarge] = useState('')
+  const [verzendkosten, setVerzendkosten] = useState('')
+  const [verzendbijdrage, setVerzendbijdrage] = useState('')
   const [regime, setRegime] = useState('DOMESTIC')
 
   const [uitkomst, setUitkomst] = useState<QuoteLineCalculation | null>(null)
@@ -104,6 +106,8 @@ export function Calculator({
       printAreaCm2: ids.map((id) => (oppervlak[id] || '0').replace(',', '.')),
       ...(manueel ? { manualUnitSalePrice: manueel.replace(',', '.') } : {}),
       ...(drukMarge ? { printMarginPercent: drukMarge.replace(',', '.') } : {}),
+      shippingCost: verzendkosten.replace(',', '.') || '0',
+      shippingContribution: verzendbijdrage.replace(',', '.') || '0',
       discountPercent: korting.replace(',', '.') || '0',
       vatRegime: regime,
     }
@@ -336,6 +340,36 @@ export function Calculator({
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
+            <label htmlFor="verzendkosten" className="text-sm font-medium text-ink-soft">
+              Verzendkosten
+            </label>
+            <Input
+              id="verzendkosten"
+              value={verzendkosten}
+              placeholder="wat het ons kost"
+              aria-describedby="verzendkosten-hint"
+              onChange={(e) => setVerzendkosten(e.target.value)}
+            />
+            <p id="verzendkosten-hint" className="text-xs text-ink-faint">
+              Wordt niet aan de klant gerekend, dus komt dit van de marge af.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="verzendbijdrage" className="text-sm font-medium text-ink-soft">
+              Bijdrage verzendkosten
+            </label>
+            <Input
+              id="verzendbijdrage"
+              value={verzendbijdrage}
+              placeholder="leeg = geen bijdrage"
+              aria-describedby="verzendbijdrage-hint"
+              onChange={(e) => setVerzendbijdrage(e.target.value)}
+            />
+            <p id="verzendbijdrage-hint" className="text-xs text-ink-faint">
+              Wat de klant eraan meebetaalt. Komt eenmalig op de offerte.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
             <label htmlFor="regime" className="text-sm font-medium text-ink-soft">
               Btw
             </label>
@@ -556,6 +590,20 @@ export function Calculator({
 
             <div className="py-3">
               <Bedrag label="Inkoopwaarde" waarde={uitkomst.purchaseTotal} />
+              {Number(uitkomst.shippingCost) > 0 && (
+                <>
+                  <Bedrag label="Waarvan verzending" waarde={uitkomst.shippingCost} />
+                  <p className="text-right text-xs text-ink-faint">
+                    {Number(uitkomst.shippingContribution) > 0
+                      ? `klant draagt ${formatEuro(uitkomst.shippingContribution)} bij`
+                      : 'niet doorberekend'}
+                    {Number(uitkomst.shippingResult) < 0 &&
+                      ` — wij leggen ${formatEuro(
+                        String(Math.abs(Number(uitkomst.shippingResult))),
+                      )} toe`}
+                  </p>
+                </>
+              )}
               <Bedrag
                 label="Marge"
                 waarde={uitkomst.marginAmount}

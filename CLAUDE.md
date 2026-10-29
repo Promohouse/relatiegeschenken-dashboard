@@ -194,6 +194,11 @@ Twee dingen bij het schrijven van e2e-tests:
 - Next voegt een onzichtbaar `role="alert"`-element toe voor schermlezers, dus
   `getByRole('alert')` is dubbelzinnig. Selecteer op de tekst die de gebruiker
   echt ziet.
+- **`getByLabel` matcht op deelstring.** Een nieuw veld "Staffelaantallen"
+  maakt `getByLabel('Aantal')` dubbelzinnig, en "Bijdrage verzendkosten" doet
+  dat met "Verzendkosten". De test valt dan om op een plek die niets met de
+  wijziging te maken heeft. Gebruik `{ exact: true }` zodra een label een
+  ander label bevat.
 - Een test die gegevens aanmaakt ruimt ze achteraf zelf op, rechtstreeks via
   `@rgh/db` en op een eigen voorvoegsel. Er is bewust geen verwijder-endpoint:
   klanten horen niet verwijderd te worden, dus kan de applicatie dat niet.

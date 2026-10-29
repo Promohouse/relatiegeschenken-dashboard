@@ -57,6 +57,12 @@ export interface OrderLineInput {
   discountPercent?: Decimal.Value
   /** Eenmalige instelkosten op de regel, los van bedrukkingen. */
   setupCost?: Decimal.Value
+  /**
+   * Eenmalige kosten op de regel die wíj betalen, los van bedrukkingen.
+   * Verzending bijvoorbeeld: die wordt hier vaak niet doorberekend, en dan
+   * drukt hij alleen op de marge. Zonder dit veld zou die marge te mooi zijn.
+   */
+  setupPurchaseCost?: Decimal.Value
   /** Btw-percentage, bijvoorbeeld 21. */
   vatRate: Decimal.Value
   vatRegime?: VatRegime
@@ -107,7 +113,10 @@ export function calculateOrderLine(input: OrderLineInput): OrderLineTotals {
     new Decimal(0),
   )
   const purchaseTotal = round2(
-    quantity.times(new Decimal(input.unitPurchasePrice ?? 0).plus(unitPrintPurchase)).plus(setupPurchase),
+    quantity
+      .times(new Decimal(input.unitPurchasePrice ?? 0).plus(unitPrintPurchase))
+      .plus(setupPurchase)
+      .plus(input.setupPurchaseCost ?? 0),
   )
   const marginAmount = round2(subtotalExclVat.minus(purchaseTotal))
   const marginPercent = subtotalExclVat.isZero()

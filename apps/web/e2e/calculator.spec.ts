@@ -189,6 +189,28 @@ test.describe('calculator', () => {
     expect(await perStuk(0)).toBeGreaterThan(await perStuk(1))
   })
 
+  test('laat verzendkosten op de marge drukken, met de bijdrage erbij', async ({ page }) => {
+    await logIn(page)
+    await openBeker(page)
+
+    await page.getByLabel('Aantal', { exact: true }).fill('250')
+    await page.getByRole('button', { name: 'Doorrekenen' }).click()
+    const zonder = page.locator('div', { hasText: /^Marge/ }).last()
+    const margeZonder = await zonder.innerText()
+
+    await page.getByLabel('Verzendkosten', { exact: true }).fill('45')
+    await page.getByRole('button', { name: 'Doorrekenen' }).click()
+
+    await expect(page.getByText('Waarvan verzending')).toBeVisible()
+    await expect(page.getByText('niet doorberekend — wij leggen € 45,00 toe')).toBeVisible()
+    // De marge is gezakt: de verzending zit in de inkoop, niet in de omzet.
+    await expect(page.locator('div', { hasText: /^Marge/ }).last()).not.toHaveText(margeZonder)
+
+    await page.getByLabel('Bijdrage verzendkosten').fill('25')
+    await page.getByRole('button', { name: 'Doorrekenen' }).click()
+    await expect(page.getByText('klant draagt € 25,00 bij — wij leggen € 20,00 toe')).toBeVisible()
+  })
+
   test('rekent zonder btw bij verlegging', async ({ page }) => {
     await logIn(page)
     await openBeker(page)

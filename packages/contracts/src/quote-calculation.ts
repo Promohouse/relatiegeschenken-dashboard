@@ -51,6 +51,14 @@ export interface QuoteLineInput {
   discountPercent?: Decimal.Value
   /** Eenmalige kosten op de regel die niets met bedrukking te maken hebben. */
   otherSetupCost?: Decimal.Value
+  /**
+   * Wat de verzending ons kost. Wordt hier meestal niet doorberekend, dus
+   * drukt hij op de marge; staat hij er niet in, dan lijkt de marge hoger dan
+   * hij is.
+   */
+  shippingCost?: Decimal.Value
+  /** Wat de klant aan de verzending bijdraagt. Vaak nul, soms een deel. */
+  shippingContribution?: Decimal.Value
   vatRate: Decimal.Value
   vatRegime?: VatRegime
   printPositions?: PrintPositionInput[]
@@ -86,6 +94,12 @@ export interface QuoteLineResult extends OrderLineTotals {
   printPositions: PrintPositionResult[]
   /** Totale eenmalige kosten op de regel, bedrukking plus overig. */
   setupTotal: Decimal
+  /** Wat de verzending ons kost. */
+  shippingCost: Decimal
+  /** Wat de klant eraan bijdraagt. */
+  shippingContribution: Decimal
+  /** Bijdrage min kosten. Negatief betekent: wij leggen erop toe. */
+  shippingResult: Decimal
   /** De prijs ligt onder de inkoop; verliesgevend, maar soms een keuze. */
   belowCost: boolean
 }
@@ -152,12 +166,17 @@ export function calculateQuoteLine(input: QuoteLineInput): QuoteLineResult {
     }
   })
 
+  const verzendkosten = new Decimal(input.shippingCost ?? 0)
+  const verzendbijdrage = new Decimal(input.shippingContribution ?? 0)
+
   const totalen = calculateOrderLine({
     quantity: input.quantity,
     unitSalePrice,
     unitPurchasePrice: inkoop,
     discountPercent: input.discountPercent,
-    setupCost: input.otherSetupCost,
+    // De bijdrage van de klant is omzet en is eenmalig, net als instelkosten.
+    setupCost: new Decimal(input.otherSetupCost ?? 0).plus(verzendbijdrage),
+    setupPurchaseCost: verzendkosten,
     vatRate: input.vatRate,
     vatRegime: input.vatRegime,
     printJobs: posities.map((p) => ({
@@ -174,7 +193,8 @@ export function calculateQuoteLine(input: QuoteLineInput): QuoteLineResult {
   const setupTotal = round4(
     posities
       .reduce((som, p) => som.plus(p.setupSaleCost), new Decimal(0))
-      .plus(input.otherSetupCost ?? 0),
+      .plus(input.otherSetupCost ?? 0)
+      .plus(verzendbijdrage),
   )
 
   return {
@@ -185,6 +205,11 @@ export function calculateQuoteLine(input: QuoteLineInput): QuoteLineResult {
     calculatedUnitSalePrice: berekend,
     printPositions: posities,
     setupTotal,
+    shippingCost: round2(verzendkosten),
+    shippingContribution: round2(verzendbijdrage),
+    // Wat de verzending per saldo kost. Negatief is het normale geval hier:
+    // er wordt niets doorberekend, dus komt het van de marge af.
+    shippingResult: round2(verzendbijdrage.minus(verzendkosten)),
     belowCost: totalen.marginAmount.isNegative(),
   }
 }
@@ -216,6 +241,8 @@ export const calculateQuoteLineSchema = z.object({
   manualUnitSalePrice: z.coerce.number().min(0).optional(),
   discountPercent: z.coerce.number().min(0).max(100).default(0),
   otherSetupCost: z.coerce.number().min(0).default(0),
+  shippingCost: z.coerce.number().min(0).default(0),
+  shippingContribution: z.coerce.number().min(0).default(0),
   vatRegime: z.enum(['DOMESTIC', 'EU_REVERSE_CHARGE', 'EXPORT', 'DOMESTIC_SHIFTED']).default('DOMESTIC'),
 })
 
@@ -252,6 +279,9 @@ export const quoteLineCalculationSchema = z.object({
     }),
   ),
   setupTotal: z.string(),
+  shippingCost: z.string(),
+  shippingContribution: z.string(),
+  shippingResult: z.string(),
   subtotalExclVat: z.string(),
   vatAmount: z.string(),
   totalInclVat: z.string(),

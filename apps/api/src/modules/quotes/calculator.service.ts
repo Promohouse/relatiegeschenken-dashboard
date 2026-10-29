@@ -88,7 +88,13 @@ export class CalculatorService {
       waarschuwingen.push('De berekende verkoopprijs ligt onder de inkoopprijs.')
     }
 
-    const posities = await this.drukposities(input, prijs.printMarginPercent, waarschuwingen)
+    const posities = await this.drukposities(
+      input,
+      // Wat er met de hand is ingevuld gaat voor, dan de ingestelde
+      // drukmarge, dan de marge die de margeregel het artikel geeft.
+      prijs.printMarginPercent ?? prijs.ruleMarginPercent,
+      waarschuwingen,
+    )
     const btw = await this.btwTarief()
 
     await this.controleerVoorraad(input, waarschuwingen)
@@ -101,6 +107,8 @@ export class CalculatorService {
       manualUnitSalePrice: input.manualUnitSalePrice ?? null,
       discountPercent: input.discountPercent,
       otherSetupCost: input.otherSetupCost,
+      shippingCost: input.shippingCost,
+      shippingContribution: input.shippingContribution,
       vatRate: btw.percentage,
       vatRegime: input.vatRegime,
       printPositions: posities,
@@ -137,6 +145,9 @@ export class CalculatorService {
         setupSaleCost: p.setupSaleCost.toFixed(4),
       })),
       setupTotal: uitkomst.setupTotal.toFixed(2),
+      shippingCost: uitkomst.shippingCost.toFixed(2),
+      shippingContribution: uitkomst.shippingContribution.toFixed(2),
+      shippingResult: uitkomst.shippingResult.toFixed(2),
       subtotalExclVat: uitkomst.subtotalExclVat.toFixed(2),
       vatAmount: uitkomst.vatAmount.toFixed(2),
       totalInclVat: uitkomst.totalInclVat.toFixed(2),
@@ -165,9 +176,15 @@ export class CalculatorService {
     if (input.printOptionIds.length === 0) return []
 
     /**
-     * Wat er met de hand is ingevuld gaat voor op de ingestelde marge, en die
-     * weer op "volg het artikel" (null). Drie trappen, één plek: anders staat
-     * dezelfde voorrang straks ook in het offertescherm.
+     * Wat er met de hand is ingevuld gaat voor op wat er is ingesteld. Die
+     * laatste is de ingestelde drukmarge, of anders de marge die de
+     * margeregel het artikel geeft - niet de marge die het artikel werkelijk
+     * haalt. Dat verschil telt zodra een klantprijsafspraak of een handmatig
+     * bedrag de artikelprijs bepaalt: het drukwerk houdt dan de normale
+     * marge in plaats van mee te zakken (ADR-0017).
+     *
+     * Drie trappen, één plek: anders staat dezelfde voorrang straks ook in
+     * het offertescherm.
      */
     const drukmarge =
       input.printMarginPercent !== undefined && input.printMarginPercent !== null

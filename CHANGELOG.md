@@ -21,6 +21,16 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   naam in het systeem. Het formulier rekent tijdens het typen de andere
   eenheid voor je uit, en de lijst toont altijd het deel van de verkoopprijs.
   Bestaande regels wijzigen niet van gedrag.
+- **Drukwerk houdt altijd de normale marge.** Bepaalt een klantprijsafspraak
+  of een handmatig bedrag de artikelprijs, dan zakt de marge op de bedrukking
+  niet mee: die volgt de marge die de margeregel geeft. Zo blijft het drukwerk
+  de plek waar de verzending uit betaald wordt, ook bij een scherpe afspraak.
+  Dit maakt af wat ADR-0017 al besloot maar wat alleen werkte als er een
+  aparte drukmarge was ingesteld.
+- **Verzendkosten en een bijdrage** in de calculator. De kosten gaan niet naar
+  de klant maar drukken wel op de marge, dus staan ze in de inkoopwaarde met
+  eronder wat er per saldo wordt toegelegd. Een bijdrage van de klant komt
+  eenmalig op de offerte en haalt dat bedrag er weer af.
 - Het margeformulier zet de vermenigvuldigingsfactor erbij: &ldquo;60% opslag,
   inkoop × 1,60&rdquo;. Dat is het getal waarmee in deze handel gerekend
   wordt, en het maakt een vergissing tussen de twee grondslagen meteen

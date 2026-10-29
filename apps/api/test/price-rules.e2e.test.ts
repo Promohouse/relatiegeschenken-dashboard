@@ -310,6 +310,48 @@ describe('margeregels', () => {
       }
     })
 
+    it('houdt de normale drukmarge aan als een afspraak de artikelprijs bepaalt', async () => {
+      /*
+       * Zonder dat de leveranciersregel iets over drukwerk zegt. Vroeger
+       * volgde het drukwerk dan de marge die het artikel wérkelijk haalde,
+       * en bij een scherpe afspraak leverde de bedrukking dus bijna niets
+       * op. Nu houdt het drukwerk de marge aan die de margeregel geeft.
+       */
+      await prisma.unscoped.priceRule.update({
+        where: { id: leveranciersregel }, data: { printMarginPercent: null },
+      })
+      const afspraak = await prisma.unscoped.customerPriceAgreement.create({
+        data: { customerId: klantId, productId, minQuantity: 100, unitPrice: '5.5000' },
+      })
+      try {
+        const res = await reken({ customerId: klantId }).expect(200)
+        expect(res.body.priceOrigin).toBe('AGREEMENT')
+        expect(res.body.unitSalePrice).toBe('5.5000')
+        // Het artikel haalt 9,09%, het drukwerk houdt de 40% van de regel.
+        expect(drukmarge(res)).toBe('40.00')
+      } finally {
+        await prisma.unscoped.customerPriceAgreement.deleteMany({ where: { id: afspraak.id } })
+        await prisma.unscoped.priceRule.update({
+          where: { id: leveranciersregel }, data: { printMarginPercent: '60.00' },
+        })
+      }
+    })
+
+    it('houdt de normale drukmarge aan bij een handmatige artikelprijs', async () => {
+      await prisma.unscoped.priceRule.update({
+        where: { id: leveranciersregel }, data: { printMarginPercent: null },
+      })
+      try {
+        const res = await reken({ manualUnitSalePrice: '5.50' }).expect(200)
+        expect(res.body.priceOrigin).toBe('MANUAL')
+        expect(drukmarge(res)).toBe('40.00')
+      } finally {
+        await prisma.unscoped.priceRule.update({
+          where: { id: leveranciersregel }, data: { printMarginPercent: '60.00' },
+        })
+      }
+    })
+
     it('laat een klantprijsafspraak de drukmarge met rust', async () => {
       // Een afspraak gaat over wat een stuk kost, niet over wat bedrukken
       // kost. Zonder deze scheiding zou het drukwerk de marge van de
@@ -390,6 +432,37 @@ describe('margeregels', () => {
           where: { id: leveranciersregel }, data: { printMarginPercent: '60.00' },
         })
       }
+    })
+
+    it('laat verzendkosten op de marge drukken en een bijdrage meetellen', async () => {
+      /*
+       * Zoals het hier gaat: verzending wordt niet doorberekend, dus komt hij
+       * van de marge af. Soms draagt de klant een deel bij. Beide moeten in
+       * de uitkomst staan, anders lijkt de marge hoger dan hij is.
+       */
+      const kaal = await reken({}).expect(200)
+
+      const metKosten = await reken({ shippingCost: '45' }).expect(200)
+      expect(metKosten.body.shippingCost).toBe('45.00')
+      expect(metKosten.body.shippingResult).toBe('-45.00')
+      // De omzet verandert niet, de inkoop wel: precies 45 euro minder marge.
+      expect(metKosten.body.subtotalExclVat).toBe(kaal.body.subtotalExclVat)
+      expect(Number(metKosten.body.marginAmount)).toBeCloseTo(Number(kaal.body.marginAmount) - 45, 2)
+
+      const metBijdrage = await reken({ shippingCost: '45', shippingContribution: '25' }).expect(200)
+      expect(metBijdrage.body.shippingResult).toBe('-20.00')
+      // De bijdrage is omzet en eenmalig, net als instelkosten.
+      expect(Number(metBijdrage.body.subtotalExclVat)).toBeCloseTo(
+        Number(kaal.body.subtotalExclVat) + 25, 2,
+      )
+      expect(Number(metBijdrage.body.marginAmount)).toBeCloseTo(
+        Number(kaal.body.marginAmount) - 20, 2,
+      )
+
+      // En een bijdrage die de kosten dekt laat de marge met rust.
+      const gedekt = await reken({ shippingCost: '45', shippingContribution: '45' }).expect(200)
+      expect(gedekt.body.shippingResult).toBe('0.00')
+      expect(Number(gedekt.body.marginAmount)).toBeCloseTo(Number(kaal.body.marginAmount), 2)
     })
 
     it('volgt het artikel als geen enkele regel iets over drukwerk zegt', async () => {
