@@ -173,3 +173,46 @@ describe('weigeren in plaats van gokken', () => {
     expect(() => calculateQuoteLine({ ...basis, quantity: 2.5 })).toThrow(/geheel getal/)
   })
 })
+
+describe('prijs per stuk, alles bij elkaar', () => {
+  // Dit is het bedrag waar een klant naar vraagt: wat kost er één?
+  const metDruk: QuoteLineInput = {
+    ...basis,
+    printPositions: [
+      {
+        positionName: 'Voorzijde',
+        methodName: 'Zeefdruk',
+        colors: 1,
+        unitPurchaseCost: '0.4400',
+        setupPurchaseCost: '31.5000',
+      },
+    ],
+  }
+
+  it('telt artikel, bedrukking en instelkosten bij elkaar', () => {
+    const r = calculateQuoteLine(metDruk)
+    // Subtotaal gedeeld door het aantal.
+    expect(r.allInUnitPrice.toFixed(4)).toBe(
+      r.subtotalExclVat.dividedBy(250).toDecimalPlaces(4).toFixed(4),
+    )
+    // En meer dan de kale artikelprijs, want er wordt bedrukt.
+    expect(r.allInUnitPrice.greaterThan(r.effectiveUnitPrice)).toBe(true)
+  })
+
+  it('daalt als er meer besteld wordt, omdat de instelkosten verdeeld worden', () => {
+    // Precies de reden dat dit bedrag altijd met het aantal erbij hoort: bij
+    // 100 stuks weegt dezelfde setup vijf keer zo zwaar als bij 500.
+    const honderd = calculateQuoteLine({ ...metDruk, quantity: 100 })
+    const vijfhonderd = calculateQuoteLine({ ...metDruk, quantity: 500 })
+
+    expect(honderd.allInUnitPrice.greaterThan(vijfhonderd.allInUnitPrice)).toBe(true)
+    // Het verschil is de setup: 66,1487 over 100 versus over 500.
+    const verschil = honderd.allInUnitPrice.minus(vijfhonderd.allInUnitPrice)
+    expect(verschil.toFixed(2)).toBe('0.53')
+  })
+
+  it('is zonder bedrukking gelijk aan de prijs na korting', () => {
+    const r = calculateQuoteLine(basis)
+    expect(r.allInUnitPrice.toFixed(2)).toBe(r.effectiveUnitPrice.toFixed(2))
+  })
+})

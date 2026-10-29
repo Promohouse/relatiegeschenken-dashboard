@@ -78,6 +78,13 @@ test.describe('calculator', () => {
 
     await expect(page.getByText('staffel vanaf 250')).toBeVisible()
     await expect(page.getByText('prijsregel', { exact: true })).toBeVisible()
+    // De stuksprijs waar een klant naar vraagt, met het aantal erbij omdat
+    // de instelkosten over de oplage verdeeld worden. Exact matchen: er staat
+    // ook een invoerveld "Prijs per stuk handmatig".
+    await expect(page.getByText('Prijs per stuk', { exact: true })).toBeVisible()
+    await expect(
+      page.getByText('inclusief bedrukking en instelkosten, bij 250 stuks'),
+    ).toBeVisible()
     await expect(page.getByText('Totaal inclusief btw')).toBeVisible()
     await expect(page.getByText('Marge', { exact: true })).toBeVisible()
     await expect(page.getByText(/% van de verkoopprijs/)).toBeVisible()
@@ -109,7 +116,8 @@ test.describe('calculator', () => {
     // uitkomstkolom is de tweede.
     const uitkomst = page.locator('div', { has: page.getByRole('heading', { name: 'Uitkomst' }) }).last()
     await expect(uitkomst.getByText(/inkoop .* · marge .*%/)).toBeVisible()
-    await expect(uitkomst.getByText(/instelkosten/)).toBeVisible()
+    // Het bedrag bij de bedrukking, niet de uitleg onder de stuksprijs.
+    await expect(uitkomst.getByText(/^instelkosten €/)).toBeVisible()
   })
 
   test('toont bij een handmatige prijs wat er is weggegeven', async ({ page }) => {

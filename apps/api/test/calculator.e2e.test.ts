@@ -154,6 +154,19 @@ describe('offertecalculator', () => {
     expect(res.body.marginPercent).toBe('52.38')
   })
 
+  it('toont de prijs per stuk inclusief alles', async () => {
+    const res = await reken({}).expect(200)
+    // Zonder bedrukking is dat gelijk aan de verkoopprijs per stuk.
+    expect(res.body.allInUnitPrice).toBe('9.0647')
+
+    const metDruk = await reken({ printOptionIds: [printOptionId], printColors: [1] }).expect(200)
+    // Mét bedrukking hoger, want drukwerk en instelkosten tellen mee.
+    expect(Number(metDruk.body.allInUnitPrice)).toBeGreaterThan(9.0647)
+    expect(Number(metDruk.body.allInUnitPrice).toFixed(2)).toBe(
+      (Number(metDruk.body.subtotalExclVat) / 250).toFixed(2),
+    )
+  })
+
   it('verschuift mee met het aantal', async () => {
     const klein = await reken({ quantity: 100 }).expect(200)
     const groot = await reken({ quantity: 1000 }).expect(200)

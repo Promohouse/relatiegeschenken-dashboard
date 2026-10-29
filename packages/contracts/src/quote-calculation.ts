@@ -70,6 +70,16 @@ export interface PrintPositionResult {
 export interface QuoteLineResult extends OrderLineTotals {
   /** De prijs per stuk die werkelijk gerekend wordt, na korting. */
   effectiveUnitPrice: Decimal
+  /**
+   * Wat één stuk kost inclusief bedrukking en instelkosten: het subtotaal
+   * gedeeld door het aantal.
+   *
+   * Dit is het bedrag waar een klant naar vraagt. Het hangt af van het
+   * aantal, want de instelkosten worden over de oplage verdeeld: bij 100
+   * stuks drukken dezelfde 60 euro instelkosten vijf keer zo zwaar als bij
+   * 500. Daarom hoort het altijd met het aantal erbij getoond te worden.
+   */
+  allInUnitPrice: Decimal
   priceOrigin: PriceOrigin
   /** De berekende prijs, ook als er handmatig een andere is ingevoerd. */
   calculatedUnitSalePrice: Decimal
@@ -160,6 +170,7 @@ export function calculateQuoteLine(input: QuoteLineInput): QuoteLineResult {
 
   const korting = new Decimal(input.discountPercent ?? 0)
   const effectiveUnitPrice = round4(unitSalePrice.times(new Decimal(1).minus(korting.dividedBy(100))))
+  const allInUnitPrice = round4(totalen.subtotalExclVat.dividedBy(input.quantity))
   const setupTotal = round4(
     posities
       .reduce((som, p) => som.plus(p.setupSaleCost), new Decimal(0))
@@ -169,6 +180,7 @@ export function calculateQuoteLine(input: QuoteLineInput): QuoteLineResult {
   return {
     ...totalen,
     effectiveUnitPrice,
+    allInUnitPrice,
     priceOrigin,
     calculatedUnitSalePrice: berekend,
     printPositions: posities,
@@ -218,6 +230,8 @@ export const quoteLineCalculationSchema = z.object({
   unitPurchasePrice: z.string(),
   unitSalePrice: z.string(),
   effectiveUnitPrice: z.string(),
+  /** Alles bij elkaar per stuk: artikel, bedrukking en instelkosten. */
+  allInUnitPrice: z.string(),
   calculatedUnitSalePrice: z.string(),
   priceOrigin: z.enum(['RULE', 'AGREEMENT', 'MANUAL']),
   /** Leesbare uitleg van waar de prijs vandaan komt. */

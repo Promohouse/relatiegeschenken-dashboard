@@ -89,6 +89,7 @@ export class CalculatorService {
         : uitkomst.calculatedUnitSalePrice
       ).toFixed(4),
       effectiveUnitPrice: uitkomst.effectiveUnitPrice.toFixed(4),
+      allInUnitPrice: uitkomst.allInUnitPrice.toFixed(4),
       calculatedUnitSalePrice: uitkomst.calculatedUnitSalePrice.toFixed(4),
       priceOrigin: uitkomst.priceOrigin,
       priceOriginLabel: this.herkomst(uitkomst.priceOrigin, prijs),

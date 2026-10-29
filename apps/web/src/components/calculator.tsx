@@ -398,6 +398,20 @@ export function Calculator({
             )}
 
             <div className="border-b border-rule py-3">
+              {/* De vraag die een klant stelt: wat kost er één? Alles erin,
+                  dus ook de instelkosten verdeeld over de oplage. */}
+              <div className="mb-2 flex items-baseline justify-between gap-4 rounded bg-sunk px-3 py-2">
+                <span className="text-sm font-medium">
+                  <span>Prijs per stuk</span>
+                  <span className="block text-xs font-normal text-ink-faint">
+                    inclusief bedrukking en instelkosten, bij {uitkomst.quantity} stuks
+                  </span>
+                </span>
+                <span className="tabular text-lg font-bold">
+                  {formatEuro(uitkomst.allInUnitPrice)}
+                </span>
+              </div>
+
               <Bedrag label={`Subtotaal (${uitkomst.quantity} stuks)`} waarde={uitkomst.subtotalExclVat} />
               <Bedrag label={`Btw ${uitkomst.vatRate}%`} waarde={uitkomst.vatAmount} />
               <Bedrag label="Totaal inclusief btw" waarde={uitkomst.totalInclVat} groot />

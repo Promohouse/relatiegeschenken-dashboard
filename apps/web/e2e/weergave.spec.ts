@@ -16,7 +16,17 @@ async function logIn(page: Page) {
   await expect(page).toHaveURL('http://localhost:3100/')
 }
 
-/** De keuze staat bij de gebruiker, dus achteraf terugzetten. */
+/**
+ * De keuze staat bij de gebruiker en blijft dus staan. Vooraf op SYSTEM
+ * zetten, zodat deze test niet afhangt van wat een vorige run of iemands
+ * handmatige klik heeft achtergelaten.
+ */
+test.beforeAll(async () => {
+  const db = createPrismaClient(process.env.DATABASE_URL, 1)
+  await db.user.updateMany({ where: { email: DEMO.email }, data: { themePreference: 'SYSTEM' } })
+  await db.$disconnect()
+})
+
 test.afterAll(async () => {
   const db = createPrismaClient(process.env.DATABASE_URL, 1)
   await db.user.updateMany({ where: { email: DEMO.email }, data: { themePreference: 'SYSTEM' } })
