@@ -12,6 +12,16 @@ import { round4 } from './money'
 
 export type PriceRuleScope = 'GLOBAL' | 'SUPPLIER' | 'CATEGORY' | 'PRODUCT' | 'CUSTOMER' | 'CHANNEL'
 
+/**
+ * Waarop het percentage van een regel slaat.
+ *
+ * Dit is de verwarring waar in deze handel het vaakst geld mee verloren gaat:
+ * 40% marge op de verkoopprijs is een opslag van 66,7% op de inkoop. Een
+ * regel zegt daarom zelf welke hij bedoelt, in plaats van dat de lezer het
+ * uit de grootte van het getal moet raden.
+ */
+export type PriceRuleMarginBasis = 'COST' | 'SALE'
+
 export interface PriceRule {
   id: string
   scope: PriceRuleScope
@@ -22,8 +32,16 @@ export interface PriceRule {
   channelId?: string | null
   /** Vanaf welk aantal deze regel geldt. */
   minQuantity: number
+  /** Waarop de percentages hieronder slaan. Standaard een opslag op de inkoop. */
+  marginBasis?: PriceRuleMarginBasis
   marginPercent?: Decimal.Value | null
   markupAmount?: Decimal.Value | null
+  /**
+   * Marge op bedrukking en instelkosten. Leeg betekent: volg de marge op het
+   * artikel. Apart van `marginPercent` omdat drukwerk in deze handel een
+   * andere opslag heeft dan het artikel zelf.
+   */
+  printMarginPercent?: Decimal.Value | null
   /** Lager wint. Dit is de bedoelde knop om regels te ordenen. */
   priority: number
   validFrom?: Date | null
@@ -112,6 +130,29 @@ export function selectPriceRule(rules: PriceRule[], ctx: PriceContext): PriceRul
   return applicableRules(rules, ctx)[0] ?? null
 }
 
+/**
+ * De drukmarge die geldt: van de regels die van toepassing zijn, de eerste
+ * die er iets over zegt.
+ *
+ * Twee dingen zijn hier bewust anders dan bij de artikelprijs. Een regel die
+ * niets over drukwerk zegt slaat de volgende niet dood - een klantregel met
+ * alleen een artikelmarge laat de algemene drukmarge dus staan, want anders
+ * zou het instellen van een klantmarge stilzwijgend de drukmarge weghalen.
+ * En dit wordt los van de klantprijsafspraak bepaald: een afspraak gaat over
+ * de prijs van het artikel, niet over wat bedrukken kost.
+ *
+ * Null betekent: niets ingesteld, volg de marge op het artikel.
+ */
+export function selectPrintMarginPercent(rules: PriceRule[], ctx: PriceContext): Decimal | null {
+  const regel = applicableRules(rules, ctx).find(
+    (r) => r.printMarginPercent !== null && r.printMarginPercent !== undefined,
+  )
+  if (!regel) return null
+  // Altijd als marge op de verkoopprijs naar buiten: daarmee rekent het
+  // drukwerk, en één omrekenpunt is er één.
+  return toSaleMarginPercent(regel.printMarginPercent!, regel.marginBasis)
+}
+
 // --- Klantprijsafspraken ---------------------------------------------------
 
 /**
@@ -160,13 +201,60 @@ export function selectCustomerAgreement(
 }
 
 /**
- * Past één regel toe: eerst de marge als percentage op de inkoopprijs, dan een
- * eventueel vast opslagbedrag erbovenop.
+ * Een percentage omgerekend naar een marge op de verkoopprijs.
+ *
+ * Een opslag van 110% op de inkoop is een marge van 52,38% op de verkoop.
+ * Beide manieren worden gebruikt; het drukwerk rekent altijd met de marge op
+ * de verkoopprijs, dus komt alles hier langs voordat het verder gaat.
+ */
+export function toSaleMarginPercent(
+  percent: Decimal.Value,
+  basis: PriceRuleMarginBasis = 'COST',
+): Decimal {
+  const p = new Decimal(percent)
+  if (basis === 'SALE') return p
+  return p.dividedBy(new Decimal(100).plus(p)).times(100)
+}
+
+/**
+ * Hetzelfde percentage andersom: van een marge op de verkoopprijs naar de
+ * opslag op de inkoop. 40% marge is 66,67% opslag.
+ *
+ * Staat hier en niet in het scherm, zodat het formulier en de berekening
+ * nooit een ander antwoord kunnen geven (harde regel 11).
+ */
+export function toCostMarkupPercent(
+  percent: Decimal.Value,
+  basis: PriceRuleMarginBasis = 'SALE',
+): Decimal {
+  const p = new Decimal(percent)
+  if (basis === 'COST') return p
+  if (p.greaterThanOrEqualTo(100)) {
+    throw new Error('Een marge van 100% of meer op de verkoopprijs kan niet.')
+  }
+  return p.dividedBy(new Decimal(100).minus(p)).times(100)
+}
+
+/**
+ * Past één regel toe: eerst het percentage, dan een eventueel vast
+ * opslagbedrag erbovenop.
+ *
+ * Bij `COST` is het percentage een opslag op de inkoopprijs, bij `SALE` een
+ * deel van de verkoopprijs. Geen grondslag betekent `COST`: dat is wat regels
+ * van voor dit veld bedoelden, dus hun prijs verandert niet.
  */
 export function applyPriceRule(purchasePrice: Decimal.Value, rule: PriceRule): Decimal {
   let prijs = new Decimal(purchasePrice)
   if (rule.marginPercent != null) {
-    prijs = prijs.times(new Decimal(1).plus(new Decimal(rule.marginPercent).dividedBy(100)))
+    const percentage = new Decimal(rule.marginPercent)
+    if (rule.marginBasis === 'SALE') {
+      if (percentage.greaterThanOrEqualTo(100)) {
+        throw new Error('Een marge van 100% of meer op de verkoopprijs kan niet.')
+      }
+      prijs = prijs.dividedBy(new Decimal(1).minus(percentage.dividedBy(100)))
+    } else {
+      prijs = prijs.times(new Decimal(1).plus(percentage.dividedBy(100)))
+    }
   }
   if (rule.markupAmount != null) {
     prijs = prijs.plus(rule.markupAmount)

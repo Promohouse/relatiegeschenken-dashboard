@@ -11,6 +11,21 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   zegt waar de prijs vandaan komt — prijsregel, klantafspraak of handmatig —
   en wat de werkelijke marge is. Er wordt niets opgeslagen: een calculatie is
   een vraag, geen handeling.
+- **Marges in te stellen** (`/beheer/marges`). Een standaardmarge voor alles,
+  en afwijkende regels per klant of per product. Elke regel heeft een marge op
+  het artikel én een eigen marge op de bedrukking; laat je die laatste leeg,
+  dan volgt het drukwerk het artikel zoals voorheen.
+- Een margeregel zegt zelf of zijn percentage een **opslag op de inkoop** of
+  een **marge op de verkoopprijs** is (ADR-0017). Die twee werden door elkaar
+  gehaald — 110% opslag is 52,38% marge — en stonden allebei onder dezelfde
+  naam in het systeem. Het formulier rekent tijdens het typen de andere
+  eenheid voor je uit, en de lijst toont altijd het deel van de verkoopprijs.
+  Bestaande regels wijzigen niet van gedrag.
+- Een klantprijsafspraak raakt de drukmarge niet meer: die gaat over wat een
+  stuk kost, niet over wat bedrukken kost. Een scherpe afspraak levert dus
+  niet langer ook drukwerk tegen bijna kostprijs op.
+- Op de klantpagina staat de eigen marge van die klant naast de
+  prijsafspraken, met de weg ernaartoe.
 - **Staffel in de calculator.** Eén knop rekent dezelfde regel door voor een
   rij aantallen en zet ze onder elkaar: inkoop per stuk, prijs per stuk, totaal
   en marge. Dat is wat een klant in deze handel vraagt, want de instelkosten

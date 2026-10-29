@@ -1,6 +1,6 @@
 import {
   Building2, ClipboardList, FileText, Folder, LayoutDashboard, Package,
-  Truck, CheckSquare, Settings, Users, ShieldCheck, Receipt, Download, Calculator,
+  Truck, CheckSquare, Settings, Users, ShieldCheck, Receipt, Download, Calculator, Percent,
 } from 'lucide-react'
 import Image from 'next/image'
 import { NavLink } from './nav-link'
@@ -21,6 +21,7 @@ const GEBOUWD = [
   { href: '/producten', label: 'Producten', icon: Package, permissie: 'products:view' },
   { href: '/calculator', label: 'Calculator', icon: Calculator, permissie: 'quotes:view' },
   { href: '/imports', label: 'Imports', icon: Download, permissie: 'imports:view' },
+  { href: '/beheer/marges', label: 'Marges', icon: Percent, permissie: 'settings:view' },
   {
     href: '/beheer/betalingsvoorwaarden', label: 'Betalingsvoorwaarden',
     icon: Receipt, permissie: 'settings:view',

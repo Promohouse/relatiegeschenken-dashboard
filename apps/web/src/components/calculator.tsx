@@ -323,9 +323,17 @@ export function Calculator({
             <Input
               id="drukMarge"
               value={drukMarge}
-              placeholder="leeg = zelfde als artikel"
+              placeholder="leeg = de ingestelde marge"
+              aria-describedby="drukMarge-hint"
               onChange={(e) => setDrukMarge(e.target.value)}
             />
+            <p id="drukMarge-hint" className="text-xs text-ink-faint">
+              Alleen voor deze calculatie. Leeg laten gebruikt de marge uit{' '}
+              <Link href="/beheer/marges" className="hover:text-accent">
+                Marges
+              </Link>
+              , en als daar niets staat de marge op het artikel.
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="regime" className="text-sm font-medium text-ink-soft">

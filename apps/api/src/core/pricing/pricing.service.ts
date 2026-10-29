@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import {
-  applicableRules, calculateUnitSalePrice, selectTier,
+  applicableRules, calculateUnitSalePrice, selectPrintMarginPercent, selectTier,
   type PriceContext, type PriceRule, type PriceResult, type CustomerPriceAgreement,
 } from '@rgh/contracts'
 import { PrismaService } from '../prisma/prisma.service'
@@ -31,6 +31,11 @@ export type PriceBreakdown = PriceResult & {
   supplierName: string | null
   /** De inkoopstaffel die bij dit aantal hoort, als die er is. */
   tierMinQuantity: number | null
+  /**
+   * De ingestelde drukmarge, of null als geen enkele regel er iets over zegt.
+   * Null is geen nul: het betekent "volg de marge op het artikel".
+   */
+  printMarginPercent: string | null
   /** Alle regels die golden, op volgorde. Maakt navraagbaar waarom deze prijs. */
   consideredRuleIds: string[]
 }
@@ -104,6 +109,9 @@ export class PricingService {
       this.laadAfspraken(context),
     ])
     const uitkomst = calculateUnitSalePrice(inkoopprijs, regels, context, afspraken)
+    // Los van de afspraak: die gaat over de prijs van het artikel, niet over
+    // wat bedrukken kost.
+    const drukmarge = selectPrintMarginPercent(regels, context)
 
     if (!uitkomst) {
       throw new PreconditionError(
@@ -120,6 +128,7 @@ export class PricingService {
       supplierId: leverancier.supplierId,
       supplierName: leverancier.supplier.name,
       tierMinQuantity: staffel?.minQuantity ?? null,
+      printMarginPercent: drukmarge === null ? null : drukmarge.toFixed(2),
       consideredRuleIds: applicableRules(regels, context).map((r) => r.id),
     }
   }
@@ -183,8 +192,10 @@ export class PricingService {
       customerId: r.customerId,
       channelId: r.channelId,
       minQuantity: r.minQuantity,
+      marginBasis: r.marginBasis,
       marginPercent: r.marginPercent?.toString() ?? null,
       markupAmount: r.markupAmount?.toString() ?? null,
+      printMarginPercent: r.printMarginPercent?.toString() ?? null,
       priority: r.priority,
       validFrom: r.validFrom,
       validTo: r.validTo,

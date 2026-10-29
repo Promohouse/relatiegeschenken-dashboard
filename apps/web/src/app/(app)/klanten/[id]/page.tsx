@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Mail, MapPin, Phone, Tag, User } from 'lucide-react'
-import type { CustomerDetail, PriceAgreementView } from '@rgh/contracts'
+import { ArrowLeft, Mail, MapPin, Percent, Phone, Tag, User } from 'lucide-react'
+import type { CustomerDetail, PriceAgreementView, PriceRuleView } from '@rgh/contracts'
 import { formatEuro } from '@rgh/contracts'
 import { apiGet, ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +40,12 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
   }
 
   const afspraken = await apiGet<PriceAgreementView[]>(`/api/customers/${id}/prices`)
+
+  // Margeregels staan onder de instellingen; wie ze niet mag zien krijgt het
+  // blok niet, en de pagina valt daar niet over.
+  const margeregels = mag(user, 'settings:view')
+    ? await apiGet<PriceRuleView[]>(`/api/price-rules?customerId=${id}`).catch(() => [])
+    : []
 
   return (
     <div className="max-w-5xl">
@@ -231,6 +237,66 @@ export default async function KlantPagina({ params }: { params: Promise<{ id: st
           </ul>
         </section>
       </div>
+
+      {mag(user, 'settings:view') && (
+        <section className="mt-5 rounded border border-rule bg-surface p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Percent size={14} aria-hidden className="text-ink-faint" />
+              Marge voor deze klant
+            </h2>
+            {mag(user, 'settings:update') && (
+              <Link
+                href={`/beheer/marges/nieuw?klant=${klant.id}`}
+                className="text-xs font-medium text-accent hover:underline"
+              >
+                Toevoegen
+              </Link>
+            )}
+          </div>
+
+          {margeregels.length === 0 ? (
+            <p className="mt-3 text-sm text-ink-faint">
+              Geen eigen marge. Deze klant volgt de standaardmarge.
+            </p>
+          ) : (
+            <ul className="mt-3 grid gap-2">
+              {margeregels.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                  <span>
+                    {mag(user, 'settings:update') ? (
+                      <Link href={`/beheer/marges/${r.id}`} className="hover:text-accent">
+                        Artikel {r.saleMarginPercent}%
+                      </Link>
+                    ) : (
+                      `Artikel ${r.saleMarginPercent}%`
+                    )}
+                    <span className="text-ink-soft">
+                      {' · bedrukking '}
+                      {r.printSaleMarginPercent ? `${r.printSaleMarginPercent}%` : 'volgt artikel'}
+                    </span>
+                    {r.minQuantity > 1 && (
+                      <span className="block text-xs text-ink-faint">vanaf {r.minQuantity} stuks</span>
+                    )}
+                  </span>
+                  {r.appliesToday ? (
+                    <Badge tone="ok">geldt</Badge>
+                  ) : r.isActive ? (
+                    <Badge tone="wait">buiten de datums</Badge>
+                  ) : (
+                    <Badge tone="rest">uit</Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p className="mt-3 text-xs text-ink-faint">
+            Een marge rekent een percentage over de inkoopprijs. Een prijsafspraak hieronder noemt
+            een vast bedrag per stuk en gaat daar nog voor.
+          </p>
+        </section>
+      )}
 
       <section className="mt-5 rounded border border-rule bg-surface p-5">
         <div className="flex items-center justify-between gap-2">

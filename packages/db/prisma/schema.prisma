@@ -2188,6 +2188,17 @@ model ChannelAssortmentItem {
   @@map("channel_assortment_items")
 }
 
+/// Waarop het percentage van een margeregel slaat. Deze twee worden in deze
+/// handel het vaakst door elkaar gehaald: 40% marge op de verkoopprijs is een
+/// opslag van 66,7% op de inkoop. Een regel zegt daarom zelf welke hij bedoelt
+/// in plaats van dat je het uit het getal moet raden.
+enum PriceRuleMarginBasis {
+  /// Opslag op de inkoopprijs: 110 betekent keer 2,1.
+  COST
+  /// Marge als deel van de verkoopprijs: 40 betekent inkoop / 0,6.
+  SALE
+}
+
 enum PriceRuleScope {
   GLOBAL
   SUPPLIER
@@ -2217,9 +2228,19 @@ model PriceRule {
 
   /// Vanaf welk aantal deze regel geldt.
   minQuantity   Int      @default(1)
-  /// Marge als percentage op de inkoopprijs, of een vast opslagbedrag.
+  /// Waarop `marginPercent` en `printMarginPercent` slaan. COST houdt het
+  /// gedrag van bestaande regels, die als opslag op de inkoop bedoeld waren.
+  marginBasis PriceRuleMarginBasis @default(COST)
+
+  /// Percentage op de inkoopprijs, of een vast opslagbedrag.
   marginPercent Decimal? @db.Decimal(6, 2)
   markupAmount  Decimal? @db.Decimal(14, 4)
+  /// Marge op bedrukking en instelkosten. Leeg betekent: dezelfde marge als
+  /// op het artikel, zodat drukwerk nooit stilzwijgend zonder marge meegaat.
+  printMarginPercent Decimal? @db.Decimal(6, 2)
+
+  /// Waarvoor deze regel bedoeld is, voor wie hem later terugleest.
+  note String?
 
   /// Lagere waarde wint bij gelijke specificiteit.
   priority  Int       @default(100)

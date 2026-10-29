@@ -88,7 +88,7 @@ export class CalculatorService {
       waarschuwingen.push('De berekende verkoopprijs ligt onder de inkoopprijs.')
     }
 
-    const posities = await this.drukposities(input, waarschuwingen)
+    const posities = await this.drukposities(input, prijs.printMarginPercent, waarschuwingen)
     const btw = await this.btwTarief()
 
     await this.controleerVoorraad(input, waarschuwingen)
@@ -159,9 +159,20 @@ export class CalculatorService {
    */
   private async drukposities(
     input: CalculateQuoteLine,
+    ingesteldeDrukmarge: string | null,
     waarschuwingen: string[],
   ): Promise<PrintPositionInput[]> {
     if (input.printOptionIds.length === 0) return []
+
+    /**
+     * Wat er met de hand is ingevuld gaat voor op de ingestelde marge, en die
+     * weer op "volg het artikel" (null). Drie trappen, één plek: anders staat
+     * dezelfde voorrang straks ook in het offertescherm.
+     */
+    const drukmarge =
+      input.printMarginPercent !== undefined && input.printMarginPercent !== null
+        ? String(input.printMarginPercent)
+        : ingesteldeDrukmarge
 
     const opties = await this.prisma.db.productPrintOption.findMany({
       where: { id: { in: input.printOptionIds }, productId: input.productId },
@@ -197,7 +208,7 @@ export class CalculatorService {
       // niet met vaste staffels, want twee van zijn vijf prijstypes hangen af
       // van het formaat van het logo (ADR-0016).
       const viaLeverancier = await this.drukprijsViaLeverancier(
-        optie, kleuren, index, input, leveranciersprijzen, waarschuwingen,
+        optie, kleuren, index, input, leveranciersprijzen, drukmarge, waarschuwingen,
       )
       if (viaLeverancier) {
         posities.push(viaLeverancier)
@@ -230,7 +241,7 @@ export class CalculatorService {
         unitPurchaseCost: staffel?.unitPrice ?? '0',
         // De instelkosten van de staffel gaan voor op die van de bedrukoptie.
         setupPurchaseCost: staffel?.setupCost ?? optie.setupCost.toString(),
-        marginPercent: input.printMarginPercent ?? null,
+        marginPercent: drukmarge,
       })
     }
     return posities
@@ -291,6 +302,8 @@ export class CalculatorService {
     index: number,
     input: CalculateQuoteLine,
     prijslijst: Awaited<ReturnType<CalculatorService['drukprijslijst']>>,
+    /** De marge die voor dit drukwerk geldt; null volgt de artikelmarge. */
+    drukmarge: string | null,
     waarschuwingen: string[],
   ): Promise<PrintPositionInput | null> {
     if (!prijslijst || !optie.supplierTechniqueCode) return null
@@ -341,7 +354,7 @@ export class CalculatorService {
         colors: kleuren,
         unitPurchaseCost: perStuk.toFixed(4),
         setupPurchaseCost: uitkomst.setupCost.toFixed(4),
-        marginPercent: input.printMarginPercent ?? null,
+        marginPercent: drukmarge,
       }
     } catch (fout) {
       waarschuwingen.push(
@@ -354,7 +367,7 @@ export class CalculatorService {
         colors: kleuren,
         unitPurchaseCost: '0',
         setupPurchaseCost: '0',
-        marginPercent: input.printMarginPercent ?? null,
+        marginPercent: drukmarge,
       }
     }
   }
