@@ -8,7 +8,14 @@ geverifieerd tegen echte documentatie of credentials.**
 > besluit in [ADR-0013](../architecture/0013-midocean-rest-koppeling.md).
 > Let op: de regel hieronder over SFTP voor midocean **klopt niet meer**.
 > midocean heeft die dienst uitgefaseerd en in 2025 uitgezet; de koppeling is
-> REST. Dat is precies waarom dit document als ongeverifieerd gemarkeerd staat. Voor iedere leverancier
+> REST. Dat is precies waarom dit document als ongeverifieerd gemarkeerd staat.
+
+> **ANDA is inmiddels ook geverifieerd.** Op 2026-10-29 kwamen de feed- en
+> Order API-handleidingen binnen; de feiten staan in [anda.md](anda.md) en het
+> besluit in [ADR-0018](../architecture/0018-anda-via-de-xml-feeds.md).
+> De regel hieronder klopt in grote lijnen, maar "REST API + XML-feeds" is
+> misleidend: de REST API is uitsluitend een **Order** API en bevat geen
+> catalogus, prijzen of voorraad. Alle gegevens komen uit de XML-feeds. Voor iedere leverancier
 geldt: eerst de officiele integratiehandleiding opvragen, dan bouwen. Geen
 endpoints of veldnamen aannemen op basis van dit document.
 
@@ -17,7 +24,7 @@ endpoints of veldnamen aannemen op basis van dit document.
 | Leverancier | Catalogus | Voorraad | Order plaatsen | Toegang |
 |---|---|---|---|---|
 | PF Concept | Product-, Price-, Print-, Decoration-XML + afbeeldingen, dagelijks | Stock-XML, 2x per dag | "Gateway" API; webservice ontvangt orders uit distributeurs-webshop | accountmanager |
-| Anda | REST API + XML-feeds: product, prijs, categorie, labeling info, labeling price, unieke prijzen | inventory feed | Order API: orders plaatsen zonder in te loggen | eigen API-pagina / Anda |
+| Anda ✅ | XML-feeds: product, prijs, categorie, labeling info, labeling price, unieke prijzen (geverifieerd) | inventory feed, elke 30 min beschikbaar | Order API, **wordt niet gebruikt** (harde regel 13) | geheime URL per feed + IP-whitelisting, via de accountmanager |
 | midocean | customer API's voor productinfo; SFTP XML (`Prodinfo_*.xml`) | via API | order management + print configuration API | alleen geregistreerde klant, via hun portaal |
 | Clipper (Interall) | FTP met productdata en foto's, Excel/XML; losse productfeed op aanvraag | onbekend | onbekend | accountmanager |
 | Toppoint | niets openbaar gevonden | onbekend | onbekend | navragen bij Toppoint |
@@ -28,7 +35,9 @@ endpoints of veldnamen aannemen op basis van dit document.
    de prijslijsten die nu al binnenkomen, en blijft de oplossing voor Clipper
    en Toppoint zolang die geen API hebben.
 2. **PF Concept** - best gedocumenteerd, duidelijke scheiding per feedtype.
-3. **Anda** - REST plus losse feeds, eigen Order API.
+3. ~~**Anda** - REST plus losse feeds, eigen Order API.~~
+   **Bijgesteld.** ANDA is XML-feeds; de REST API gaat alleen over bestellen
+   en gebruiken we niet. Zie [anda.md](anda.md).
 4. ~~**midocean** - SFTP XML, vraagt eerst toegang via hun portaal.~~
    **Achterhaald.** midocean is REST en staat nu vooraan, omdat de
    documentatie er als eerste is. Zie [midocean.md](midocean.md).

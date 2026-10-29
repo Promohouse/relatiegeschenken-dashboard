@@ -25,6 +25,7 @@ nieuwe die de oude vervangt.
 | [0015](architecture/0015-voorraad-gaat-buiten-de-beoordeling-om.md) | Voorraad wordt rechtstreeks weggeschreven: het is een meting, geen eigenschap, en overschrijft niets van ons | besloten 2026-10-28 |
 | [0016](architecture/0016-drukprijzen-worden-berekend-niet-opgeslagen.md) | Drukprijzen van een leverancier worden bewaard als prijsstructuur en bij het calculeren uitgerekend; omrekenen naar eigen staffels kan niet | besloten 2026-10-29 |
 | [0017](architecture/0017-een-margeregel-noemt-zijn-eigen-grondslag.md) | Een margeregel zegt zelf of zijn percentage een opslag op de inkoop of een marge op de verkoopprijs is; drukwerk krijgt een eigen marge | besloten 2026-10-29, tijdens het bouwen van het margescherm gebleken |
+| [0018](architecture/0018-anda-via-de-xml-feeds.md) | ANDA koppelen via de XML-feeds; de Order API bevat geen catalogus, prijzen of voorraad en bestellen gaat buiten het platform om | besloten 2026-10-29, op basis van hun feed-handleiding v3.2 en Order API-handleiding v2.8 |
 
 ## 1b. Bevestigd op 2026-10-28
 
