@@ -75,6 +75,12 @@ onbeperkt, 950 euro eenmalig. Technisch formaat staat niet openbaar.
 
 Niet gekozen (zie ADR-0004). Blijft achter de hand als extra connector.
 
+## Concept-mails met de openstaande vragen
+
+Staan in [vragen-aan-leveranciers.md](vragen-aan-leveranciers.md), per
+leverancier, met de prijsbepalende vragen vooraan. Een antwoord gaat daarna
+naar het document van die leverancier en vervalt daar.
+
 ## Op te vragen per leverancier
 
 - Integratiehandleiding en veldspecificatie
