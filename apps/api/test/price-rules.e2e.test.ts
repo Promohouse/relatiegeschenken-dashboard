@@ -353,6 +353,45 @@ describe('margeregels', () => {
       }
     })
 
+    it('rekent bij één marge hetzelfde als marge over het totaal incl. opdruk', async () => {
+      /*
+       * Zoals er in dit bedrijf gerekend wordt: inkoop maal 1,6, over alles
+       * bij elkaar. Dat is hetzelfde als 1,6 op het artikel en 1,6 op het
+       * drukwerk apart, want vermenigvuldigen verdeelt zich over een som:
+       * 1,6 x (a + b) = 1,6a + 1,6b. Deze test legt dat vast, zodat een
+       * latere wijziging aan de drukprijsberekening het niet stilletjes
+       * ongedaan maakt.
+       */
+      const maal16 = await prisma.unscoped.priceRule.create({
+        data: {
+          scope: 'PRODUCT', productId, marginBasis: 'COST',
+          marginPercent: '60.00', printMarginPercent: null, priority: 1,
+        },
+      })
+      // Ook de algemenere regel mag niets over drukwerk zeggen: een regel die
+      // zwijgt laat de volgende namelijk staan, en dan zou het drukwerk een
+      // andere marge dragen dan het artikel.
+      await prisma.unscoped.priceRule.update({
+        where: { id: leveranciersregel }, data: { printMarginPercent: null },
+      })
+      try {
+        const res = await reken({}).expect(200)
+
+        const inkoop = Number(res.body.purchaseTotal)
+        const verkoop = Number(res.body.subtotalExclVat)
+        expect(verkoop).toBeCloseTo(inkoop * 1.6, 2)
+        // 0,6 / 1,6 = 37,5% van de verkoopprijs. Niet 35%, en dat scheelt op
+        // een order van tienduizend euro tweehonderdvijftig euro.
+        expect(res.body.marginPercent).toBe('37.50')
+        expect(drukmarge(res)).toBe('37.50')
+      } finally {
+        await prisma.unscoped.priceRule.deleteMany({ where: { id: maal16.id } })
+        await prisma.unscoped.priceRule.update({
+          where: { id: leveranciersregel }, data: { printMarginPercent: '60.00' },
+        })
+      }
+    })
+
     it('volgt het artikel als geen enkele regel iets over drukwerk zegt', async () => {
       const zonder = await prisma.unscoped.priceRule.update({
         where: { id: leveranciersregel }, data: { printMarginPercent: null },

@@ -1032,12 +1032,21 @@ async function seedChannels() {
     })
   }
 
-  // Eén vertrekpunt-margeregel. Specifiekere regels per leverancier,
-  // categorie of klant krijgen een lagere priority en gaan daarmee voor.
+  // Eén vertrekpunt-margeregel: inkoop maal 1,6, zoals het bedrijf zelf
+  // rekent. Dat is 60% opslag op de inkoop oftewel 37,5% van de verkoopprijs.
+  // Specifiekere regels per leverancier, categorie of klant krijgen een
+  // lagere priority en gaan daarmee voor.
+  //
+  // Geen aparte drukmarge: zo draagt het drukwerk dezelfde marge als het
+  // artikel, en komt de hele regel uit op inkoop maal 1,6 - precies de som
+  // die in dit bedrijf met de hand gemaakt wordt.
   const existing = await prisma.priceRule.findFirst({ where: { scope: 'GLOBAL', isDemo: true } })
   if (!existing) {
     await prisma.priceRule.create({
-      data: { scope: 'GLOBAL', marginPercent: '110.00', priority: 1000, ...demo },
+      data: {
+        scope: 'GLOBAL', marginBasis: 'COST', marginPercent: '60.00',
+        priority: 1000, ...demo,
+      },
     })
   }
 

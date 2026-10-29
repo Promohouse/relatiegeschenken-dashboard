@@ -236,6 +236,21 @@ export function toCostMarkupPercent(
 }
 
 /**
+ * Hetzelfde percentage als vermenigvuldigingsfactor: 60% opslag en 37,5%
+ * marge zijn allebei "keer 1,6".
+ *
+ * Dat is het getal waar in deze handel mee gerekend wordt, en het maakt een
+ * vergissing tussen de twee grondslagen meteen zichtbaar: wie 60 invult als
+ * marge op de verkoopprijs ziet keer 2,50 staan in plaats van keer 1,60.
+ */
+export function toPriceFactor(
+  percent: Decimal.Value,
+  basis: PriceRuleMarginBasis = 'COST',
+): Decimal {
+  return new Decimal(1).plus(toCostMarkupPercent(percent, basis).dividedBy(100))
+}
+
+/**
  * Past één regel toe: eerst het percentage, dan een eventueel vast
  * opslagbedrag erbovenop.
  *

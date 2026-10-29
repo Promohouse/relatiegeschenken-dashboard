@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import {
-  BASIS_LABELS, toCostMarkupPercent, toSaleMarginPercent,
+  BASIS_LABELS, toCostMarkupPercent, toPriceFactor, toSaleMarginPercent,
   type PriceRuleView, type ProductPickerItem,
 } from '@rgh/contracts'
 import { Aanvinkveld, FormVeld, FormVoet, useOpslaan } from './deelformulier'
@@ -25,10 +25,13 @@ function Omgerekend({ waarde, basis }: { waarde: string; basis: 'COST' | 'SALE' 
   if (!waarde.trim() || Number.isNaN(getal)) return null
 
   try {
+    // De factor erbij: dat is het getal waar in deze handel mee gerekend
+    // wordt, en het maakt een vergissing tussen de twee meteen zichtbaar.
+    const factor = `inkoop × ${toPriceFactor(getal, basis).toFixed(2).replace('.', ',')}`
     return basis === 'COST' ? (
-      <>Dat is {toSaleMarginPercent(getal, 'COST').toFixed(2)}% van de verkoopprijs.</>
+      <>Dat is {toSaleMarginPercent(getal, 'COST').toFixed(2)}% van de verkoopprijs ({factor}).</>
     ) : (
-      <>Dat is {toCostMarkupPercent(getal, 'SALE').toFixed(2)}% opslag op de inkoop.</>
+      <>Dat is {toCostMarkupPercent(getal, 'SALE').toFixed(2)}% opslag op de inkoop ({factor}).</>
     )
   } catch {
     return <>Een marge van 100% of meer van de verkoopprijs kan niet.</>

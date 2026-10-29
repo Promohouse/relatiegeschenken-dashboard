@@ -89,8 +89,17 @@ describe('prijsengine', () => {
   })
 
   it('rekent met de staffel die bij het aantal hoort', async () => {
+    /*
+     * Bewust op de eigen leverancier en niet GLOBAL. Een actieve
+     * GLOBAL-regel zonder geldigheidsvenster geldt voor élk artikel in de
+     * gedeelde testdatabase, dus zolang hij bestaat krijgen producten in
+     * andere testbestanden een prijs waar die tests er juist geen
+     * verwachten. Vitest draait bestanden parallel, dus dat valt willekeurig
+     * om. Het bereik GLOBAL wordt hieronder apart getest, in een eigen
+     * tijdvenster.
+     */
     const algemeen = await prisma.db.priceRule.create({
-      data: { scope: 'GLOBAL', marginPercent: '110.00', priority: 1000 },
+      data: { scope: 'SUPPLIER', supplierId, marginPercent: '110.00', priority: 1000 },
     })
     regelIds.push(algemeen.id)
 
@@ -212,6 +221,37 @@ describe('prijsengine', () => {
     expect(uitkomst.source).toBe('RULE')
 
     await prisma.db.customerPriceAgreement.delete({ where: { id: verlopen.id } })
+  })
+
+  it('past een GLOBAL-regel toe, binnen een eigen tijdvenster', async () => {
+    /*
+     * GLOBAL geldt voor alles, dus mag deze regel niet "nu" gelden: dan zou
+     * hij de tests in andere bestanden omgooien. Hij krijgt een venster ver
+     * vooruit en wordt met een peildatum in dat venster bevraagd. Zo is het
+     * bereik volledig getest zonder dat er iets lekt.
+     */
+    const venster = {
+      validFrom: new Date('2030-01-01T00:00:00Z'),
+      validTo: new Date('2030-12-31T00:00:00Z'),
+    }
+    const peildatum = new Date('2030-06-01T00:00:00Z')
+
+    const globaal = await prisma.db.priceRule.create({
+      // Priority 0: in 2030 is de productregel uit de vorige test ook van
+      // kracht, en bij gelijke priority wint de specifiekere.
+      data: { scope: 'GLOBAL', marginPercent: '150.00', priority: 0, ...venster },
+    })
+    regelIds.push(globaal.id)
+
+    // Op de peildatum wint hij van elke andere regel op dit product.
+    const straks = await pricing.resolveUnitPrice({ productId, quantity: 250, at: peildatum })
+    expect(regelVan(straks).id).toBe(globaal.id)
+    expect(straks.unitPrice.toFixed(4)).toBe('10.7913')
+
+    // En vandaag telt hij niet mee, want hij valt buiten zijn venster.
+    const nu = await pricing.resolveUnitPrice({ productId, quantity: 250 })
+    expect(regelVan(nu).id).not.toBe(globaal.id)
+    expect(nu.unitPrice.toFixed(4)).toBe('9.0647')
   })
 
   it('weigert een ongeldig aantal', async () => {

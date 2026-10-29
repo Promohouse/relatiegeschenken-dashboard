@@ -138,6 +138,14 @@ npm run typecheck      # TypeScript over de hele monorepo
   `staged_changes`, nooit rechtstreeks in `products`. Zie ADR-0004.
 - **Testgegevens** krijgen een uniek nummer via `test/helpers.ts`; vitest
   draait testbestanden parallel, dus een tijdstempel is niet uniek genoeg.
+- **Maak in een test nooit een actieve `GLOBAL`-prijsregel zonder
+  geldigheidsvenster.** Die geldt voor elk artikel in de gedeelde
+  testdatabase, dus zolang hij bestaat krijgen producten in andere
+  testbestanden een prijs waar die tests er juist geen verwachten. Omdat
+  bestanden parallel draaien valt dat willekeurig om, en de fout wijst naar
+  het verkeerde bestand. Gebruik een eigen leverancier of product, of geef de
+  regel een venster ver vooruit en bevraag hem met `at`. Zie
+  `pricing.service.test.ts`.
 
 ## API: decorator-metadata moet overal gelijk zijn
 

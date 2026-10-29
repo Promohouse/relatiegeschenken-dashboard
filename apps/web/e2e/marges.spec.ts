@@ -40,11 +40,13 @@ test.describe('marges', () => {
     await expect(page.getByRole('heading', { name: 'Marges' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Standaardmarge' })).toBeVisible()
 
-    // De demoregel staat op 110% opslag op de inkoop. Dat is 52,38% van de
-    // verkoopprijs, en dát is het getal waar in deze handel op gestuurd wordt.
+    // De standaard staat op inkoop maal 1,6, zoals het bedrijf rekent. Dat is
+    // 60% opslag en 37,5% van de verkoopprijs; dat laatste is het getal waar
+    // in deze handel op gestuurd wordt, dus staat het voorop.
     const standaard = page.locator('table').first()
-    await expect(standaard.getByText('52.38%')).toBeVisible()
-    await expect(standaard.getByText('110% opslag')).toBeVisible()
+    await expect(standaard.getByText('37.50%')).toBeVisible()
+    await expect(standaard.getByText('60% opslag')).toBeVisible()
+    // Geen eigen drukmarge, dus de hele regel komt uit op maal 1,6.
     await expect(standaard.getByText('volgt artikel')).toBeVisible()
   })
 
@@ -55,11 +57,17 @@ test.describe('marges', () => {
     // Standaard staat de keuze op de marge op de verkoopprijs, want zo praat
     // de verkoop erover.
     await page.getByLabel('Op het artikel').fill('40')
-    await expect(page.getByText('Dat is 66.67% opslag op de inkoop.')).toBeVisible()
+    await expect(page.getByText('Dat is 66.67% opslag op de inkoop (inkoop × 1,67).')).toBeVisible()
 
+    // Inkoop maal 1,6 zoals het bedrijf rekent, van de andere kant ingevuld.
     await page.getByLabel('Hoe is het percentage bedoeld?').selectOption('COST')
-    await page.getByLabel('Op het artikel').fill('110')
-    await expect(page.getByText('Dat is 52.38% van de verkoopprijs.')).toBeVisible()
+    await page.getByLabel('Op het artikel').fill('60')
+    await expect(page.getByText('Dat is 37.50% van de verkoopprijs (inkoop × 1,60).')).toBeVisible()
+
+    // En dit is waarom de factor erbij staat: 60 invullen als marge op de
+    // verkoopprijs is geen maal 1,6 maar maal 2,5.
+    await page.getByLabel('Hoe is het percentage bedoeld?').selectOption('SALE')
+    await expect(page.getByText('Dat is 150.00% opslag op de inkoop (inkoop × 2,50).')).toBeVisible()
 
     // En de grens die alleen voor de ene manier geldt.
     await page.getByLabel('Hoe is het percentage bedoeld?').selectOption('SALE')

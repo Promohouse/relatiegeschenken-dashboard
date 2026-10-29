@@ -21,6 +21,14 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   naam in het systeem. Het formulier rekent tijdens het typen de andere
   eenheid voor je uit, en de lijst toont altijd het deel van de verkoopprijs.
   Bestaande regels wijzigen niet van gedrag.
+- Het margeformulier zet de vermenigvuldigingsfactor erbij: &ldquo;60% opslag,
+  inkoop × 1,60&rdquo;. Dat is het getal waarmee in deze handel gerekend
+  wordt, en het maakt een vergissing tussen de twee grondslagen meteen
+  zichtbaar — 60 invullen als marge op de verkoopprijs is geen × 1,60 maar
+  × 2,50.
+- De standaardmarge in de demogegevens staat op inkoop × 1,6 (60% opslag,
+  37,5% van de verkoopprijs), zoals het bedrijf zelf rekent, in plaats van op
+  een verzonnen 110%.
 - Een klantprijsafspraak raakt de drukmarge niet meer: die gaat over wat een
   stuk kost, niet over wat bedrukken kost. Een scherpe afspraak levert dus
   niet langer ook drukwerk tegen bijna kostprijs op.
