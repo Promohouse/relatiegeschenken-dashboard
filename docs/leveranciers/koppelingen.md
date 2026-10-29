@@ -15,7 +15,14 @@ geverifieerd tegen echte documentatie of credentials.**
 > besluit in [ADR-0018](../architecture/0018-anda-via-de-xml-feeds.md).
 > De regel hieronder klopt in grote lijnen, maar "REST API + XML-feeds" is
 > misleidend: de REST API is uitsluitend een **Order** API en bevat geen
-> catalogus, prijzen of voorraad. Alle gegevens komen uit de XML-feeds. Voor iedere leverancier
+> catalogus, prijzen of voorraad. Alle gegevens komen uit de XML-feeds.
+
+> **PF Concept is eveneens geverifieerd.** Op 2026-10-29 kwamen de
+> datafeed-handleiding v3.6.7, de Gateway-handleiding v2.2.2 en de
+> gebruiksvoorwaarden binnen; de feiten staan in [pf-concept.md](pf-concept.md)
+> en het besluit in
+> [ADR-0019](../architecture/0019-pf-concept-via-de-datafeeds.md).
+> Ook hier geldt: de "Gateway" is een **order**dienst, geen gegevensbron. Voor iedere leverancier
 geldt: eerst de officiele integratiehandleiding opvragen, dan bouwen. Geen
 endpoints of veldnamen aannemen op basis van dit document.
 
@@ -23,7 +30,7 @@ endpoints of veldnamen aannemen op basis van dit document.
 
 | Leverancier | Catalogus | Voorraad | Order plaatsen | Toegang |
 |---|---|---|---|---|
-| PF Concept | Product-, Price-, Print-, Decoration-XML + afbeeldingen, dagelijks | Stock-XML, 2x per dag | "Gateway" API; webservice ontvangt orders uit distributeurs-webshop | accountmanager |
+| PF Concept ✅ | Product-, Price-, Print data-, Print price- en Attribute-feed in XML **of JSON**, dagelijks tot wekelijks (geverifieerd) | Stock-feed, 2× per dag; activering vraagt goedkeuring country manager | Gateway (REST/JSON), **wordt niet gebruikt** (harde regel 13) | ondertekend aanvraagformulier; unieke code in de bestandsnaam, contractueel vertrouwelijk |
 | Anda ✅ | XML-feeds: product, prijs, categorie, labeling info, labeling price, unieke prijzen (geverifieerd) | inventory feed, elke 30 min beschikbaar | Order API, **wordt niet gebruikt** (harde regel 13) | geheime URL per feed + IP-whitelisting, via de accountmanager |
 | midocean | customer API's voor productinfo; SFTP XML (`Prodinfo_*.xml`) | via API | order management + print configuration API | alleen geregistreerde klant, via hun portaal |
 | Clipper (Interall) | FTP met productdata en foto's, Excel/XML; losse productfeed op aanvraag | onbekend | onbekend | accountmanager |
@@ -35,6 +42,10 @@ endpoints of veldnamen aannemen op basis van dit document.
    de prijslijsten die nu al binnenkomen, en blijft de oplossing voor Clipper
    en Toppoint zolang die geen API hebben.
 2. **PF Concept** - best gedocumenteerd, duidelijke scheiding per feedtype.
+   **Bevestigd**, en technisch de makkelijkste van de drie: `model > item` is
+   onze product/variant-opzet, de inkoopstaffel is onze staffel, en de
+   drukprijs is een opzoektabel in plaats van een formule. Zie
+   [pf-concept.md](pf-concept.md).
 3. ~~**Anda** - REST plus losse feeds, eigen Order API.~~
    **Bijgesteld.** ANDA is XML-feeds; de REST API gaat alleen over bestellen
    en gebruiken we niet. Zie [anda.md](anda.md).
