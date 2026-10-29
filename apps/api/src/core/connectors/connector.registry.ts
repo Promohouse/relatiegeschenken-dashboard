@@ -4,6 +4,7 @@ import { PreconditionError } from '../errors/domain-errors'
 import type { SupplierConnector } from './connector.types'
 import { MidoceanConnector } from './midocean/midocean.connector'
 import { PfConceptConnector } from './pfconcept/pfconcept.connector'
+import { AndaConnector } from './anda/anda.connector'
 
 /**
  * Welke code hoort bij welke koppeling.
@@ -17,9 +18,14 @@ import { PfConceptConnector } from './pfconcept/pfconcept.connector'
 export class ConnectorRegistry {
   private readonly connectors = new Map<string, SupplierConnector>()
 
-  constructor(midocean: MidoceanConnector, pfconcept: PfConceptConnector) {
+  constructor(
+    midocean: MidoceanConnector,
+    pfconcept: PfConceptConnector,
+    anda: AndaConnector,
+  ) {
     this.registreer(midocean)
     this.registreer(pfconcept)
+    this.registreer(anda)
   }
 
   private registreer(connector: SupplierConnector) {

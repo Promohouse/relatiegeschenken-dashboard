@@ -18,6 +18,12 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   ingevuld worden om scherper te offreren, en de uitkomst zegt met welk
   oppervlak gerekend is. Geeft de leverancier geen maximum, dan waarschuwt de
   calculatie zoals voorheen in plaats van met nul te rekenen.
+- **ANDA-connector** (`anda-xml`). Leest hun XML-feeds: catalogus, prijzen,
+  voorraad en drukgegevens. Artikelnummers worden op `rootItemNumber`
+  gegroepeerd tot één product met varianten, want ANDA kent geen
+  variantenblok. Drukprijzen zitten er bewust nog niet in: vier dingen in hun
+  prijsopbouw zijn onbeantwoord en een aanname zou verkeerde prijzen
+  opleveren (ADR-0018).
 - **PF Concept-connector** (`pfconcept-feed`). Leest hun datafeeds v3 in JSON:
   catalogus, prijzen, voorraad, drukgegevens en drukprijzen, met de
   bestandsnamen per taal, afdeling en assortiment. Nog niet tegen echte

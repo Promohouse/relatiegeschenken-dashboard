@@ -305,6 +305,21 @@ Uit de Order API-handleiding, blz. 3:
 De feeds zijn de gegevensbron, de API is voor transacties. Dat is ook het
 besluit dat we nemen; zie ADR-0018.
 
+## Wat er al gebouwd is
+
+De connector `anda-xml` leest catalogus, prijzen, voorraad en drukgegevens,
+getest tegen de voorbeelden uit de handleiding. Drie dingen uit die
+implementatie om te weten:
+
+- **De prijsfeed kent geen staffel.** Eén prijs per artikel, niet een reeks
+  vanaf-aantallen zoals bij midocean en PF Concept. Staffelkorting op het
+  artikel komt dus niet uit deze feed.
+- **Onderdelen van een samengesteld artikel** (`assemblyProduct` = 1) blijven
+  buiten de catalogus, tot duidelijk is hoe het samengestelde artikel zelf te
+  herkennen is.
+- **Drukprijzen zitten er nog niet in**, om de vier redenen hieronder. Daar
+  iets voor verzinnen zou verkeerde prijzen opleveren.
+
 ## Nog op te vragen bij ANDA
 
 1. De drie tegenstrijdige updatefrequenties hierboven.

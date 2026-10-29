@@ -940,12 +940,22 @@ async function seedConnections() {
       ],
     },
     {
-      supplier: 'ANDA', key: 'anda-rest', connectorKey: 'anda-xml', transport: 'XML_FEED',
+      // Stond hier op basis van het vooronderzoek: ANDA zou REST zijn. Hun
+      // REST API blijkt uitsluitend een Order API (ADR-0018).
+      supplier: 'ANDA', key: 'anda-rest', connectorKey: 'anda-rest', transport: 'REST',
+      notes:
+        'VERVALLEN. Geraden op basis van openbare bronnen. De echte koppeling is anda-xml; ' +
+        'zie docs/leveranciers/anda.md en ADR-0018.',
+      capabilities: [],
+    },
+    {
+      supplier: 'ANDA', key: 'anda-xml', connectorKey: 'anda-xml', transport: 'XML_FEED',
       notes:
         'XML-feeds volgens handleiding v3.2: product, prijs, voorraad, labeling, labeling price ' +
         'en unieke prijzen. Toegang via een geheime URL plus IP-whitelisting; de REST API van ' +
         'ANDA is uitsluitend een Order API en wordt niet gebruikt. Zie docs/leveranciers/anda.md ' +
-        'en ADR-0018. Connector nog niet gebouwd.',
+        'en ADR-0018. Drukprijzen zitten nog niet in de connector: vier dingen in hun ' +
+        'prijsopbouw zijn onbeantwoord.',
       capabilities: [
         { capability: 'CATALOG', priority: 10, schedule: '0 6 * * *' },
         { capability: 'PRICE_TIERS', priority: 10, schedule: '0 7 * * 0' },
