@@ -431,6 +431,74 @@ describe('offertecalculator', () => {
     })
   })
 
+  describe('staffel', () => {
+    const staffel = (body: Record<string, unknown>) =>
+      api().post('/api/quotes/calculate/tiers').set('Cookie', cookie).send({ productId, ...body })
+
+    it('geeft een regel per aantal, gesorteerd en zonder dubbelen', async () => {
+      const res = await staffel({ quantities: [1000, 100, 250, 100] }).expect(200)
+
+      expect(res.body.rows.map((r: { quantity: number }) => r.quantity)).toEqual([100, 250, 1000])
+      // Elke regel kiest zijn eigen inkoopstaffel; dat is de hele reden dat
+      // een staffel iets zegt wat één losse calculatie niet zegt.
+      expect(res.body.rows.map((r: { calculation: { unitPurchasePrice: string } }) =>
+        r.calculation.unitPurchasePrice)).toEqual(['4.8500', '4.3165', '4.0000'])
+      expect(res.body.rows.every((r: { error: null }) => r.error === null)).toBe(true)
+    })
+
+    it('laat de instelkosten per stuk zien, niet alleen de staffelprijs', async () => {
+      const res = await staffel({
+        quantities: [100, 1000], printOptionIds: [printOptionId], printColors: [1],
+      }).expect(200)
+
+      const [klein, groot] = res.body.rows
+      // Dezelfde eenmalige instelkosten over tien keer zoveel stuks: de
+      // prijs per stuk zakt harder dan de inkoopstaffel alleen verklaart.
+      const perStuk = (r: { calculation: { allInUnitPrice: string } }) => Number(r.calculation.allInUnitPrice)
+      expect(perStuk(klein)).toBeGreaterThan(perStuk(groot))
+      const inkoopverschil = 4.85 - 4.0
+      expect(perStuk(klein) - perStuk(groot)).toBeGreaterThan(inkoopverschil)
+    })
+
+    it('blokkeert de hele staffel niet als één aantal niet kan', async () => {
+      // Een prijsregel die pas vanaf 250 geldt: bij 100 stuks is er geen
+      // prijs, en dat mag de rest van de tabel niet onbruikbaar maken.
+      const alleenGroot = await prisma.unscoped.product.create({
+        data: {
+          articleNumber: `${tag}-7777`,
+          name: 'Vanaf 250',
+          suppliers: { create: [{ supplierId, supplierArticleNumber: `G-${tag}`, purchasePrice: '2.0000' }] },
+        },
+      })
+      const regel = await prisma.unscoped.priceRule.create({
+        data: {
+          scope: 'PRODUCT', productId: alleenGroot.id,
+          minQuantity: 250, marginPercent: '110.00', priority: 1000,
+        },
+      })
+      try {
+        const res = await api()
+          .post('/api/quotes/calculate/tiers').set('Cookie', cookie)
+          .send({ productId: alleenGroot.id, quantities: [100, 250] })
+          .expect(200)
+
+        expect(res.body.rows[0].quantity).toBe(100)
+        expect(res.body.rows[0].calculation).toBeNull()
+        expect(res.body.rows[0].error).toContain('geen prijsregel')
+        expect(res.body.rows[1].quantity).toBe(250)
+        expect(res.body.rows[1].calculation.unitSalePrice).toBe('4.2000')
+        expect(res.body.rows[1].error).toBeNull()
+      } finally {
+        await prisma.unscoped.priceRule.deleteMany({ where: { id: regel.id } })
+      }
+    })
+
+    it('weigert een staffel zonder aantallen en een onleesbaar lange', async () => {
+      await staffel({ quantities: [] }).expect(400)
+      await staffel({ quantities: Array.from({ length: 13 }, (_, i) => (i + 1) * 10) }).expect(400)
+    })
+  })
+
   it('weigert te rekenen zonder prijsregel', async () => {
     // Een ander product, dus zonder de productregel hierboven.
     const kaal = await prisma.unscoped.product.create({

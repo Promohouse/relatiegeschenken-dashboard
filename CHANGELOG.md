@@ -11,6 +11,14 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   zegt waar de prijs vandaan komt — prijsregel, klantafspraak of handmatig —
   en wat de werkelijke marge is. Er wordt niets opgeslagen: een calculatie is
   een vraag, geen handeling.
+- **Staffel in de calculator.** Eén knop rekent dezelfde regel door voor een
+  rij aantallen en zet ze onder elkaar: inkoop per stuk, prijs per stuk, totaal
+  en marge. Dat is wat een klant in deze handel vraagt, want de instelkosten
+  zijn eenmalig en wegen bij een kleine oplage veel zwaarder per stuk. De
+  aantallen staan in de instellingen (`quote.tierQuantities`, standaard 50, 100,
+  250, 500 en 1000) en zijn per berekening aan te passen. Een aantal dat niet
+  te prijzen is krijgt een eigen melding in zijn regel en laat de rest van de
+  tabel staan.
 - Een handmatige prijs laat de berekende prijs zichtbaar staan, zodat te zien
   is wat er is weggegeven, en het drukwerk volgt de nieuwe marge in plaats van
   de oude.

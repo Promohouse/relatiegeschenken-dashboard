@@ -263,5 +263,40 @@ export const quoteLineCalculationSchema = z.object({
   warnings: z.array(z.string()),
 })
 
+/**
+ * Dezelfde calculatie voor meerdere aantallen tegelijk.
+ *
+ * Klanten vragen in deze handel vrijwel altijd om een staffel: wat kost het
+ * bij 50, bij 250, bij 1000. Dat is geen gemak maar het antwoord op de
+ * eigenlijke vraag, want de stuksprijs verschuift met het aantal langs drie
+ * assen tegelijk: de inkoopstaffel, de drukstaffel, en de instelkosten die
+ * over meer stuks verdeeld worden.
+ */
+export const calculateTiersSchema = calculateQuoteLineSchema
+  .omit({ quantity: true })
+  .extend({
+    quantities: z
+      .array(z.coerce.number().int().min(1).max(1_000_000))
+      .min(1, 'Vul ten minste één aantal in')
+      .max(12, 'Meer dan twaalf aantallen maakt een staffel onleesbaar'),
+  })
+
+export const quoteTierRowSchema = z.object({
+  quantity: z.number().int(),
+  /** Leeg als er voor dit aantal geen prijs te bepalen is. */
+  calculation: quoteLineCalculationSchema.nullable(),
+  /**
+   * Waarom er geen prijs is. Eén onmogelijk aantal mag de rest van de staffel
+   * niet tegenhouden: bij 50 stuks bestaat een drukstaffel soms niet terwijl
+   * 250 prima gaat.
+   */
+  error: z.string().nullable(),
+})
+
+export const quoteTiersSchema = z.object({ rows: z.array(quoteTierRowSchema) })
+
 export type CalculateQuoteLine = z.infer<typeof calculateQuoteLineSchema>
+export type CalculateTiers = z.infer<typeof calculateTiersSchema>
 export type QuoteLineCalculation = z.infer<typeof quoteLineCalculationSchema>
+export type QuoteTierRow = z.infer<typeof quoteTierRowSchema>
+export type QuoteTiers = z.infer<typeof quoteTiersSchema>

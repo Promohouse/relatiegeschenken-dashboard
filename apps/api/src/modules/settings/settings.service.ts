@@ -35,6 +35,24 @@ export class SettingsService {
     private readonly audit: AuditService,
   ) {}
 
+  /**
+   * Aantallen waarvoor de calculator standaard een staffel toont.
+   *
+   * Een instelling en geen vaste lijst in de code: welke aantallen zinvol
+   * zijn verschilt per handel, en in deze handel per seizoen.
+   */
+  async tierQuantities(): Promise<number[]> {
+    const rij = await this.prisma.db.setting.findUnique({ where: { key: 'quote.tierQuantities' } })
+    const waarde = rij?.value
+    if (!Array.isArray(waarde)) return [50, 100, 250, 500, 1000]
+
+    const aantallen = waarde
+      .map((v) => Number(v))
+      .filter((v) => Number.isInteger(v) && v > 0)
+      .sort((a, b) => a - b)
+    return aantallen.length > 0 ? aantallen : [50, 100, 250, 500, 1000]
+  }
+
   async company(): Promise<CompanySettings> {
     const rijen = await this.prisma.db.setting.findMany({
       where: { key: { in: Object.values(BEDRIJFSVELDEN) } },

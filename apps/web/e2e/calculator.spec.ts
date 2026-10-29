@@ -26,7 +26,7 @@ async function openBeker(page: Page) {
   await page.getByRole('button', { name: 'Zoeken' }).click()
   // Exact artikelnummer: die wordt meteen gekozen, zonder tussenstap.
   await expect(page.getByText('Thermosbeker Rivo 350 ml')).toBeVisible()
-  await expect(page.getByLabel('Aantal')).toBeVisible()
+  await expect(page.getByLabel('Aantal', { exact: true })).toBeVisible()
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -45,7 +45,7 @@ test.describe('calculator', () => {
 
     // Geen exacte treffer op artikelnummer: dan kiest de gebruiker zelf.
     await page.getByRole('button', { name: /Thermosbeker Rivo 350 ml/ }).click()
-    await expect(page.getByLabel('Aantal')).toBeVisible()
+    await expect(page.getByLabel('Aantal', { exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: 'naar het product' })).toBeVisible()
   })
 
@@ -65,7 +65,7 @@ test.describe('calculator', () => {
     await page.getByRole('link', { name: 'Doorrekenen' }).click()
 
     await expect(page.getByRole('heading', { name: 'Calculator' })).toBeVisible()
-    await expect(page.getByLabel('Aantal')).toBeVisible()
+    await expect(page.getByLabel('Aantal', { exact: true })).toBeVisible()
     await expect(page.getByText('Thermosbeker Rivo 350 ml')).toBeVisible()
   })
 
@@ -73,7 +73,7 @@ test.describe('calculator', () => {
     await logIn(page)
     await openBeker(page)
 
-    await page.getByLabel('Aantal').fill('250')
+    await page.getByLabel('Aantal', { exact: true }).fill('250')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
 
     await expect(page.getByText('staffel vanaf 250')).toBeVisible()
@@ -94,11 +94,11 @@ test.describe('calculator', () => {
     await logIn(page)
     await openBeker(page)
 
-    await page.getByLabel('Aantal').fill('100')
+    await page.getByLabel('Aantal', { exact: true }).fill('100')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
     await expect(page.getByText('staffel vanaf 100')).toBeVisible()
 
-    await page.getByLabel('Aantal').fill('500')
+    await page.getByLabel('Aantal', { exact: true }).fill('500')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
     await expect(page.getByText('staffel vanaf 500')).toBeVisible()
   })
@@ -107,7 +107,7 @@ test.describe('calculator', () => {
     await logIn(page)
     await openBeker(page)
 
-    await page.getByLabel('Aantal').fill('250')
+    await page.getByLabel('Aantal', { exact: true }).fill('250')
     const bedrukking = page.getByRole('checkbox').first()
     await bedrukking.check()
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
@@ -124,7 +124,7 @@ test.describe('calculator', () => {
     await logIn(page)
     await openBeker(page)
 
-    await page.getByLabel('Aantal').fill('250')
+    await page.getByLabel('Aantal', { exact: true }).fill('250')
     await page.getByLabel('Prijs per stuk handmatig').fill('6,00')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
 
@@ -136,7 +136,7 @@ test.describe('calculator', () => {
     await logIn(page)
     await openBeker(page)
 
-    await page.getByLabel('Aantal').fill('250')
+    await page.getByLabel('Aantal', { exact: true }).fill('250')
     await page.getByLabel('Prijs per stuk handmatig').fill('1,00')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
 
@@ -145,11 +145,55 @@ test.describe('calculator', () => {
     ).toBeVisible()
   })
 
+  test('toont een staffel voor de ingestelde aantallen', async ({ page }) => {
+    await logIn(page)
+    await openBeker(page)
+
+    // De aantallen komen uit de instellingen, niet uit de code.
+    await expect(page.getByLabel('Staffelaantallen')).toHaveValue('50, 100, 250, 500, 1000')
+    await page.getByRole('button', { name: 'Staffel tonen' }).click()
+
+    const rijen = page.locator('table tbody tr')
+    await expect(rijen).toHaveCount(5)
+    await expect(rijen.first().locator('td').first()).toHaveText('50')
+    await expect(rijen.last().locator('td').first()).toHaveText('1000')
+    await expect(page.getByText('Die instelkosten zijn eenmalig')).toBeVisible()
+
+    // De staffel en de losse uitkomst staan niet samen in beeld, anders is
+    // onduidelijk welk aantal je nu aan het bekijken bent.
+    await page.getByRole('button', { name: 'Doorrekenen' }).click()
+    await expect(page.locator('table tbody tr')).toHaveCount(0)
+    await expect(page.getByText('Prijs per stuk', { exact: true })).toBeVisible()
+  })
+
+  test('neemt eigen aantallen over en laat de stuksprijs zakken', async ({ page }) => {
+    await logIn(page)
+    await openBeker(page)
+
+    await page.getByLabel('Staffelaantallen').fill('100, 1000')
+    await page.getByRole('checkbox').first().check()
+    await page.getByRole('button', { name: 'Staffel tonen' }).click()
+
+    const rijen = page.locator('table tbody tr')
+    await expect(rijen).toHaveCount(2)
+    await expect(rijen.nth(0).locator('td').first()).toHaveText('100')
+    await expect(rijen.nth(1).locator('td').first()).toHaveText('1000')
+
+    // Prijs per stuk: inkoopstaffel én instelkosten over de oplage, dus bij
+    // tien keer zoveel stuks hoort hij lager te liggen.
+    const perStuk = async (rij: number) =>
+      Number(
+        (await rijen.nth(rij).locator('td').nth(2).innerText())
+          .replace(/[^\d,]/g, '').replace(',', '.'),
+      )
+    expect(await perStuk(0)).toBeGreaterThan(await perStuk(1))
+  })
+
   test('rekent zonder btw bij verlegging', async ({ page }) => {
     await logIn(page)
     await openBeker(page)
 
-    await page.getByLabel('Aantal').fill('250')
+    await page.getByLabel('Aantal', { exact: true }).fill('250')
     await page.getByLabel('Btw').selectOption('EU_REVERSE_CHARGE')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
 

@@ -111,6 +111,16 @@ async function seedBaseData() {
     { key: 'vat.rounding', value: 'PER_LINE_2_DECIMALS', description: 'Btw per orderregel afronden op twee decimalen (ADR-0005).' },
     { key: 'vat.defaultCode', value: 'NL21', description: 'Standaard btw-tarief voor nieuwe orderregels.' },
     { key: 'demo.enabled', value: true, description: 'Toont de demodata-waarschuwing in de interface.' },
+    {
+      key: 'quote.tierQuantities',
+      value: [50, 100, 250, 500, 1000],
+      description: 'Aantallen waarvoor de calculator standaard een staffel toont.',
+    },
+    {
+      key: 'quote.validityDays',
+      value: 30,
+      description: 'Hoeveel dagen een offerte geldig is.',
+    },
 
     { key: 'company.name', value: 'Promohouse BV', description: 'Naam zoals op documenten.' },
     { key: 'company.street', value: 'Weegschaalstraat 5', description: 'Straat en huisnummer.' },

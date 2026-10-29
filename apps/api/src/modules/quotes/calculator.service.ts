@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import {
   calculatePrintPositionCost, calculateQuoteLine, parseSupplierDecimal, selectTier,
-  type CalculateQuoteLine, type PrintPositionInput, type PrintPricingType,
-  type PrintVarCost, type QuoteLineCalculation,
+  type CalculateQuoteLine, type CalculateTiers, type PrintPositionInput, type PrintPricingType,
+  type PrintVarCost, type QuoteLineCalculation, type QuoteTiers,
 } from '@rgh/contracts'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { PricingService } from '../../core/pricing/pricing.service'
@@ -26,6 +26,36 @@ export class CalculatorService {
     private readonly pricing: PricingService,
     private readonly stock: SupplierStockService,
   ) {}
+
+  /**
+   * Dezelfde calculatie voor een rij aantallen.
+   *
+   * Eén onmogelijk aantal houdt de rest niet tegen: bij 50 stuks bestaat een
+   * drukstaffel soms niet terwijl 250 prima gaat, en dan hoort de klant
+   * gewoon de aantallen te zien die wel kunnen, met bij het ene aantal de
+   * reden erbij.
+   */
+  async calculateTiers(input: CalculateTiers): Promise<QuoteTiers> {
+    const aantallen = [...new Set(input.quantities)].sort((a, b) => a - b)
+
+    const rows = []
+    for (const quantity of aantallen) {
+      try {
+        rows.push({
+          quantity,
+          calculation: await this.calculate({ ...input, quantity }),
+          error: null,
+        })
+      } catch (fout) {
+        rows.push({
+          quantity,
+          calculation: null,
+          error: fout instanceof Error ? fout.message : String(fout),
+        })
+      }
+    }
+    return { rows }
+  }
 
   async calculate(input: CalculateQuoteLine): Promise<QuoteLineCalculation> {
     const waarschuwingen: string[] = []

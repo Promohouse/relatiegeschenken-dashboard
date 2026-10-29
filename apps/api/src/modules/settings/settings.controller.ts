@@ -15,6 +15,16 @@ registerSchema('CompanySettings', companySettingsSchema)
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
+  @Get('quote-tiers')
+  @RequireLogin()
+  @ApiOperation({
+    summary: 'Standaardaantallen voor de staffel in de calculator',
+    description: 'Welke aantallen zinvol zijn verschilt per handel, dus is het een instelling.',
+  })
+  quoteTiers() {
+    return this.settings.tierQuantities()
+  }
+
   @Get('company')
   @RequireLogin()
   @ApiOperation({

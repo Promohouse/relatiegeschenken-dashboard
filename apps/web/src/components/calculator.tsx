@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   formatEuro,
-  type ProductDetail, type ProductPickerItem, type QuoteLineCalculation,
+  type ProductDetail, type ProductPickerItem, type QuoteLineCalculation, type QuoteTiers,
 } from '@rgh/contracts'
 import { ProductKiezer } from './product-kiezer'
 import { Button } from '@/components/ui/button'
@@ -35,10 +35,13 @@ function Bedrag({ label, waarde, groot = false, alarm = false }: {
 export function Calculator({
   beginProduct,
   klanten,
+  staffelaantallen,
 }: {
   /** Product uit de URL, bijvoorbeeld via "Doorrekenen" op de productpagina. */
   beginProduct: ProductDetail | null
   klanten: { id: string; name: string }[]
+  /** Standaardaantallen voor de staffel, uit de instellingen. */
+  staffelaantallen: number[]
 }) {
   const [product, setProduct] = useState<ProductDetail | null>(beginProduct)
   const [laadFout, setLaadFout] = useState<string | null>(null)
@@ -53,6 +56,8 @@ export function Calculator({
   const [regime, setRegime] = useState('DOMESTIC')
 
   const [uitkomst, setUitkomst] = useState<QuoteLineCalculation | null>(null)
+  const [staffel, setStaffel] = useState<QuoteTiers | null>(null)
+  const [aantallen, setAantallen] = useState(staffelaantallen.join(', '))
   const [fout, setFout] = useState<string | null>(null)
   const [bezig, setBezig] = useState(false)
 
@@ -62,7 +67,9 @@ export function Calculator({
    */
   async function kies(keuze: ProductPickerItem | null) {
     setUitkomst(null)
+    setStaffel(null)
     setGekozenDruk({})
+    setOppervlak({})
     setFout(null)
     setLaadFout(null)
 
@@ -86,39 +93,70 @@ export function Calculator({
     }
   }
 
-  async function reken() {
+  /** Wat beide knoppen meesturen; zo kunnen ze niet uit elkaar lopen. */
+  function invoer() {
+    const ids = Object.keys(gekozenDruk)
+    return {
+      productId: product!.id,
+      ...(customerId ? { customerId } : {}),
+      printOptionIds: ids,
+      printColors: ids.map((id) => gekozenDruk[id]),
+      printAreaCm2: ids.map((id) => (oppervlak[id] || '0').replace(',', '.')),
+      ...(manueel ? { manualUnitSalePrice: manueel.replace(',', '.') } : {}),
+      ...(drukMarge ? { printMarginPercent: drukMarge.replace(',', '.') } : {}),
+      discountPercent: korting.replace(',', '.') || '0',
+      vatRegime: regime,
+    }
+  }
+
+  async function verstuur<T>(pad: string, body: unknown): Promise<T | null> {
     setBezig(true)
     setFout(null)
     try {
-      const ids = Object.keys(gekozenDruk)
-      const res = await fetch('/api/quotes/calculate', {
+      const res = await fetch(pad, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productId: product!.id,
-          quantity,
-          ...(customerId ? { customerId } : {}),
-          printOptionIds: ids,
-          printColors: ids.map((id) => gekozenDruk[id]),
-          printAreaCm2: ids.map((id) => (oppervlak[id] || '0').replace(',', '.')),
-          ...(manueel ? { manualUnitSalePrice: manueel.replace(',', '.') } : {}),
-          ...(drukMarge ? { printMarginPercent: drukMarge.replace(',', '.') } : {}),
-          discountPercent: korting.replace(',', '.') || '0',
-          vatRegime: regime,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-        setFout(body?.error?.message ?? 'De calculatie lukte niet.')
-        setUitkomst(null)
-        return
+        const fout = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
+        setFout(fout?.error?.message ?? 'De calculatie lukte niet.')
+        return null
       }
-      setUitkomst((await res.json()) as QuoteLineCalculation)
+      return (await res.json()) as T
     } catch {
       setFout('De server is niet bereikbaar.')
+      return null
     } finally {
       setBezig(false)
     }
+  }
+
+  async function reken() {
+    setStaffel(null)
+    const uit = await verstuur<QuoteLineCalculation>('/api/quotes/calculate', {
+      ...invoer(),
+      quantity,
+    })
+    setUitkomst(uit)
+  }
+
+  /**
+   * De staffel: dezelfde calculatie voor een rij aantallen. Daar vraagt een
+   * klant in deze handel vrijwel altijd om, want de stuksprijs verschuift met
+   * het aantal.
+   */
+  async function rekenStaffel() {
+    setUitkomst(null)
+    const lijst = aantallen
+      .split(/[,;\s]+/)
+      .map((a) => a.trim())
+      .filter(Boolean)
+    const uit = await verstuur<QuoteTiers>('/api/quotes/calculate/tiers', {
+      ...invoer(),
+      quantities: lijst,
+    })
+    setStaffel(uit)
   }
 
   const herkomst = uitkomst ? HERKOMST[uitkomst.priceOrigin] : null
@@ -307,10 +345,26 @@ export function Calculator({
           </div>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-5 flex flex-wrap items-end gap-3">
           <Button type="button" disabled={bezig} onClick={() => void reken()}>
             {bezig ? 'Bezig met rekenen…' : 'Doorrekenen'}
           </Button>
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="aantallen" className="text-xs font-medium text-ink-soft">
+                Staffelaantallen
+              </label>
+              <Input
+                id="aantallen"
+                value={aantallen}
+                onChange={(e) => setAantallen(e.target.value)}
+                className="h-9 w-44"
+              />
+            </div>
+            <Button type="button" variant="secondary" disabled={bezig} onClick={() => void rekenStaffel()}>
+              Staffel tonen
+            </Button>
+          </div>
         </div>
 
         {fout && (
@@ -325,10 +379,85 @@ export function Calculator({
       <div className="rounded border border-rule bg-surface p-5">
         <h2 className="text-sm font-semibold">Uitkomst</h2>
 
-        {!uitkomst ? (
+        {staffel ? (
+          <div className="mt-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-rule text-left">
+                    <th className="pb-2 pr-3 text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Aantal
+                    </th>
+                    <th className="pb-2 pr-3 text-right text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Inkoop p/st
+                    </th>
+                    <th className="pb-2 pr-3 text-right text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Prijs p/st
+                    </th>
+                    <th className="pb-2 pr-3 text-right text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Totaal
+                    </th>
+                    <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Marge
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffel.rows.map((rij) => (
+                    <tr key={rij.quantity} className="border-b border-rule last:border-0">
+                      <td className="py-2 pr-3 tabular font-medium">{rij.quantity}</td>
+                      {rij.calculation ? (
+                        <>
+                          <td className="py-2 pr-3 text-right tabular text-ink-soft">
+                            {formatEuro(rij.calculation.unitPurchasePrice)}
+                          </td>
+                          <td className="py-2 pr-3 text-right tabular font-medium">
+                            {formatEuro(rij.calculation.allInUnitPrice)}
+                          </td>
+                          <td className="py-2 pr-3 text-right tabular">
+                            {formatEuro(rij.calculation.subtotalExclVat)}
+                          </td>
+                          <td
+                            className={`py-2 text-right tabular ${
+                              rij.calculation.belowCost ? 'text-alarm' : 'text-ink-soft'
+                            }`}
+                          >
+                            {rij.calculation.marginPercent}%
+                          </td>
+                        </>
+                      ) : (
+                        <td colSpan={4} className="py-2 text-xs text-alarm">
+                          {rij.error}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="mt-3 text-xs text-ink-faint">
+              Prijs per stuk is inclusief bedrukking en instelkosten. Die instelkosten zijn
+              eenmalig, dus bij een klein aantal wegen ze zwaarder — daar komt het verschil
+              tussen de regels grotendeels vandaan. Bedragen zijn exclusief btw.
+            </p>
+
+            {staffel.rows.some((r) => r.calculation?.warnings.length) && (
+              <div className="mt-3 grid gap-2">
+                {staffel.rows
+                  .filter((r) => r.calculation?.warnings.length)
+                  .map((r) => (
+                    <p key={r.quantity} className="rounded border border-wait/30 bg-wait-bg px-3 py-2 text-xs text-wait">
+                      Bij {r.quantity} stuks: {r.calculation!.warnings.join(' ')}
+                    </p>
+                  ))}
+              </div>
+            )}
+          </div>
+        ) : !uitkomst ? (
           <p className="mt-3 text-sm text-ink-faint">
-            Vul het aantal in en druk op doorrekenen. Er wordt niets opgeslagen; een calculatie is
-            een vraag, geen handeling.
+            Vul het aantal in en druk op doorrekenen, of vraag een staffel voor meerdere aantallen
+            tegelijk. Er wordt niets opgeslagen; een calculatie is een vraag, geen handeling.
           </p>
         ) : (
           <>
