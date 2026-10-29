@@ -18,6 +18,15 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   ingevuld worden om scherper te offreren, en de uitkomst zegt met welk
   oppervlak gerekend is. Geeft de leverancier geen maximum, dan waarschuwt de
   calculatie zoals voorheen in plaats van met nul te rekenen.
+- **De offerte als document** (`/api/quotes`). Een offerte aanmaken bij een
+  klant, regels toevoegen en weghalen, met een nummer uit de reeks
+  (`OFF-2026-00001`) en een eerste versie. Een regel is een bewaarde
+  calculatie: dezelfde calculator als het scherm rekent hem uit en het
+  resultaat gaat naar eigen kolommen, zodat een latere prijswijziging op het
+  product een uitgebrachte offerte nooit meer raakt.
+- Een vastgezette offerteversie weigert wijzigingen met een melding die te
+  plaatsen is. De databasetriggers weigeren het ook, maar hun melding is voor
+  een gebruiker niet te lezen.
 - **Importmapping voor PF Concept.** De pijplijn verwerkt nu twee soorten
   drukprijslijst. Catalogus, prijzen en voorraad liepen al generiek; de
   drukprijzen van PF landen in twee nieuwe tabellen als opzoektabel over

@@ -78,6 +78,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | | Taak | Acceptatiecriterium |
 |---|---|---|
 | ✅ | Offertecalculator | gereed: inkoopstaffel, prijsregel of klantafspraak, bedrukking per positie met eigen marge, korting, instelkosten en btw-regime; een handmatige prijs herberekent de werkelijke marge en de berekende prijs blijft zichtbaar; een staffel rekent dezelfde regel door voor een instelbare rij aantallen; marges zijn per klant en per product in te stellen, met een aparte marge op drukwerk (ADR-0017). Transport en overige kosten volgen met de offerte zelf |
+| ◻ | Offerte als document | gereed: aanmaken bij een klant met nummer uit de reeks en een eerste versie, regels als bewaarde calculatie met bedrukking, totalen als som van de regels, en een vastgezette versie die wijzigingen weigert. Nog niet: versturen en vastzetten (statusovergangen, dus workflow-engine, harde regel 10), een tweede versie, het scherm en de PDF |
 | ◻ | Offerteversies | een verzonden versie is onveranderlijk; een wijziging maakt een nieuwe versie |
 | ◻ | PDF-offerte | logo, bedrijfsgegevens, productafbeeldingen, specificaties, prijzen, levervoorwaarden, akkoordmogelijkheid |
 | ◻ | Digitaal akkoord in het portaal | alleen een bevoegde goedkeurder; tweemaal klikken levert één order |

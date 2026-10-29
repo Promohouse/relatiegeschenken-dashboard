@@ -104,6 +104,16 @@ export class SettingsService {
     return na
   }
 
+  /**
+   * Hoeveel dagen een offerte geldig is. Een instelling en geen vast getal:
+   * dertig dagen is gebruikelijk, maar niet in elke markt.
+   */
+  async quoteValidityDays(): Promise<number> {
+    const rij = await this.prisma.db.setting.findUnique({ where: { key: 'quote.validityDays' } })
+    const waarde = Number(rij?.value)
+    return Number.isInteger(waarde) && waarde > 0 ? waarde : 30
+  }
+
   async company(): Promise<CompanySettings> {
     const rijen = await this.prisma.db.setting.findMany({
       where: { key: { in: Object.values(BEDRIJFSVELDEN) } },
