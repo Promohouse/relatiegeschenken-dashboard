@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common'
 import type { ConnectorCapability, Prisma } from '@rgh/db'
 import { computePayloadHash, parseSupplierDecimal } from '@rgh/contracts'
+import type { SupplierConnector } from '../../core/connectors/connector.types'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { AuditService } from '../../core/audit/audit.service'
 import { AppConfig } from '../../core/config/config.service'
 import { CredentialsService } from '../../core/connectors/credentials.service'
 import { ConnectorRegistry } from '../../core/connectors/connector.registry'
 import {
-  type CanonicalPrice, type CanonicalProduct, type CanonicalStock,
+  type CanonicalPrice, type CanonicalPrintData, type CanonicalProduct, type CanonicalStock,
   type ConnectorContext, type FetchedRecord,
 } from '../../core/connectors/connector.types'
 import { NotFoundError, PreconditionError } from '../../core/errors/domain-errors'
@@ -52,8 +53,11 @@ export interface RunResult {
  * dus er zijn twee sloten.
  */
 const ALLEEN_LEZEN = new Set<ConnectorCapability>([
-  'CATALOG', 'MEDIA', 'PRICE_TIERS', 'INVENTORY',
+  'CATALOG', 'MEDIA', 'PRICE_TIERS', 'INVENTORY', 'PRINT_DATA',
 ])
+
+/** Een connector waarvan vaststaat dat hij drukgegevens kan. */
+type SupplierConnectorMetDruk = Required<Pick<SupplierConnector, 'fetchPrintPrices'>>
 
 /** Wat we van onze eigen kant nodig hebben om te vergelijken. */
 interface HuidigProduct {
@@ -145,6 +149,17 @@ export class ImportsService {
         resultaat = await this.verwerkPrijzen(
           run.id, verbinding, await connector.fetchPrices(context),
         )
+      } else if (capability === 'PRINT_DATA') {
+        if (!connector.fetchPrintData || !connector.fetchPrintPrices) {
+          throw new PreconditionError(`Connector ${connector.key} kan geen drukgegevens ophalen.`)
+        }
+        resultaat = await this.verwerkDrukgegevens(
+          run.id,
+          verbinding,
+          await connector.fetchPrintData(context),
+          await connector.fetchPrintPrices(context),
+          dryRun,
+        )
       } else if (capability === 'INVENTORY') {
         if (!connector.fetchStock) {
           throw new PreconditionError(`Connector ${connector.key} kan geen voorraad ophalen.`)
@@ -155,7 +170,7 @@ export class ImportsService {
       } else {
         throw new PreconditionError(
           `De capability ${capability} wordt nog niet door de importpijplijn verwerkt. ` +
-            'Op dit moment zijn dat CATALOG, PRICE_TIERS en INVENTORY.',
+            'Op dit moment zijn dat CATALOG, PRICE_TIERS, INVENTORY en PRINT_DATA.',
         )
       }
 
@@ -666,6 +681,203 @@ export class ImportsService {
     }
 
     return Object.keys(diff).length > 0 ? diff : null
+  }
+
+  // --- Drukgegevens --------------------------------------------------------
+
+  /**
+   * Bedrukposities, technieken en drukprijzen.
+   *
+   * Twee soorten gegevens met een eigen route, zoals ADR-0016 vastlegt:
+   *
+   * - de **drukprijslijst** (handlingcodes en technieken) is referentiedata
+   *   van de leverancier. Die staat in een eigen tabel, overschrijft niets van
+   *   ons en gaat daarom rechtstreeks naar binnen;
+   * - de **bedrukopties per artikel** horen bij het product en gaan wel door
+   *   de beoordeling, net als de rest van de catalogus.
+   */
+  private async verwerkDrukgegevens(
+    importRunId: string,
+    verbinding: { id: string; supplierId: string },
+    records: FetchedRecord<CanonicalPrintData>[],
+    prijzen: Awaited<ReturnType<NonNullable<SupplierConnectorMetDruk['fetchPrintPrices']>>>,
+    dryRun: boolean,
+  ) {
+    const samenvatting: RunSummary = { created: 0, updated: 0, unchanged: 0, missing: 0, unmatched: 0 }
+    let itemsFailed = 0
+
+    if (!dryRun) {
+      await this.legPrijslijstVast(verbinding.id, prijzen)
+      await this.legTechniekenVast(prijzen)
+      await this.legPositiesVast(records)
+    }
+
+    // Alleen artikelen die wij hebben; de rest heeft geen product om
+    // bedrukopties aan te hangen.
+    const koppelingen = await this.prisma.db.productSupplier.findMany({
+      where: { supplierId: verbinding.supplierId, isActive: true },
+      select: {
+        supplierArticleNumber: true,
+        product: {
+          select: {
+            id: true,
+            printManipulationCode: true,
+            printOptions: {
+              select: {
+                supplierTechniqueCode: true,
+                positionLabel: true,
+                maxColors: true,
+              },
+            },
+          },
+        },
+      },
+    })
+    const productPerArtikel = new Map(koppelingen.map((k) => [k.supplierArticleNumber, k.product]))
+
+    for (const record of records) {
+      const product = productPerArtikel.get(record.externalId)
+      if (!product) {
+        samenvatting.unmatched = (samenvatting.unmatched ?? 0) + 1
+        continue
+      }
+
+      try {
+        const gewenst = record.value.positions.flatMap((positie) =>
+          positie.techniques.map((techniek) => ({
+            positie: positie.positionCode,
+            techniek: techniek.code,
+            maxColors: techniek.maxColors,
+            maxWidthMm: positie.maxWidthMm,
+            maxHeightMm: positie.maxHeightMm,
+          })),
+        )
+
+        const huidig = product.printOptions
+          .map((o) => `${o.positionLabel ?? ''}|${o.supplierTechniqueCode ?? ''}`)
+          .sort()
+        const nieuw = gewenst.map((g) => `${g.positie}|${g.techniek}`).sort()
+        const manipulatieGelijk = (product.printManipulationCode ?? null) === record.value.manipulationCode
+
+        if (manipulatieGelijk && JSON.stringify(huidig) === JSON.stringify(nieuw)) {
+          samenvatting.unchanged++
+          continue
+        }
+
+        await this.prisma.db.stagedChange.create({
+          data: {
+            importRunId,
+            entityType: 'ProductPrintOptions',
+            entityId: product.id,
+            externalId: record.externalId,
+            changeType: huidig.length === 0 ? 'CREATE' : 'UPDATE',
+            diff: {
+              printManipulationCode: {
+                van: product.printManipulationCode ?? null,
+                naar: record.value.manipulationCode,
+              },
+              bedrukopties: { van: huidig.length, naar: gewenst },
+            } as Prisma.InputJsonValue,
+          },
+        })
+
+        if (huidig.length === 0) samenvatting.created++
+        else samenvatting.updated++
+        await this.noteerItem(importRunId, record.externalId, 'OK')
+      } catch (fout) {
+        itemsFailed++
+        await this.noteerItem(
+          importRunId, record.externalId, 'FAILED',
+          fout instanceof Error ? fout.message : String(fout),
+        )
+      }
+    }
+
+    return {
+      itemsSeen: records.length,
+      itemsChanged: samenvatting.created + samenvatting.updated,
+      itemsFailed,
+      summary: samenvatting,
+    }
+  }
+
+  /** De drukprijslijst van deze leverancier vastleggen. */
+  private async legPrijslijstVast(
+    connectionId: string,
+    prijzen: Awaited<ReturnType<NonNullable<SupplierConnectorMetDruk['fetchPrintPrices']>>>,
+  ) {
+    for (const m of prijzen.manipulations) {
+      await this.prisma.db.supplierPrintManipulation.upsert({
+        where: { connectionId_code: { connectionId, code: m.code } },
+        update: {
+          description: m.description,
+          pricePerPiece: parseSupplierDecimal(m.pricePerPiece, 'handling').toFixed(4),
+          fetchedAt: new Date(),
+        },
+        create: {
+          connectionId,
+          code: m.code,
+          description: m.description,
+          pricePerPiece: parseSupplierDecimal(m.pricePerPiece, 'handling').toFixed(4),
+        },
+      })
+    }
+
+    for (const t of prijzen.techniques) {
+      const gegevens = {
+        name: t.name,
+        pricingType: t.pricingType,
+        setup: t.setup ? parseSupplierDecimal(t.setup, 'setup').toFixed(4) : null,
+        setupRepeat: t.setupRepeat ? parseSupplierDecimal(t.setupRepeat, 'setup_repeat').toFixed(4) : null,
+        nextColourCostIndicator: t.nextColourCostIndicator,
+        varCosts: t.varCosts as unknown as Prisma.InputJsonValue,
+        validFrom: prijzen.validFrom,
+        validUntil: prijzen.validUntil,
+        fetchedAt: new Date(),
+      }
+      await this.prisma.db.supplierPrintTechnique.upsert({
+        where: { connectionId_code: { connectionId, code: t.code } },
+        update: gegevens,
+        create: { connectionId, code: t.code, ...gegevens },
+      })
+    }
+  }
+
+  /**
+   * Technieken als eigen bedrukkingstechniek vastleggen.
+   *
+   * Voorlopig een-op-een met de leverancier, met zijn code in de sleutel.
+   * Normaliseren over leveranciers heen komt zodra er een tweede leverancier
+   * is; daar is `value_mappings` voor bedoeld. Nu zou het een vertaling zijn
+   * zonder tweede taal.
+   */
+  private async legTechniekenVast(
+    prijzen: Awaited<ReturnType<NonNullable<SupplierConnectorMetDruk['fetchPrintPrices']>>>,
+  ) {
+    for (const t of prijzen.techniques) {
+      const key = `midocean-${t.code.toLowerCase()}`
+      await this.prisma.db.printMethod.upsert({
+        where: { key },
+        update: { name: t.name },
+        create: { key, name: t.name },
+      })
+    }
+  }
+
+  /** Alle voorkomende bedrukposities als eigen positie vastleggen. */
+  private async legPositiesVast(records: FetchedRecord<CanonicalPrintData>[]) {
+    const codes = new Set<string>()
+    for (const r of records) for (const p of r.value.positions) codes.add(p.positionCode)
+
+    let sort = 100
+    for (const code of [...codes].sort()) {
+      const key = `midocean-${code.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+      await this.prisma.db.printPosition.upsert({
+        where: { key },
+        update: {},
+        create: { key, name: code, sort: (sort += 1) },
+      })
+    }
   }
 
   // --- Voorraad ------------------------------------------------------------

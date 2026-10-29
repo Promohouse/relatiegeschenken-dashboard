@@ -89,6 +89,9 @@ export const productPrintOptionSchema = z.object({
   maxColors: z.number().int(),
   /** Maximale bedrukkingsafmeting, vrije tekst zoals leveranciers die geven. */
   printArea: z.string().nullable(),
+  /** Maximale bedrukmaat in millimeters, als de leverancier die opgeeft. */
+  maxPrintWidthMm: z.string().nullable(),
+  maxPrintHeightMm: z.string().nullable(),
   setupCost: z.string(),
 })
 

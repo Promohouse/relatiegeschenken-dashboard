@@ -1,4 +1,5 @@
 import type { ConnectorCapability } from '@rgh/db'
+import type { PrintPricingType, PrintVarCost } from '@rgh/contracts'
 import { IntegrationError } from '../errors/domain-errors'
 
 /**
@@ -73,6 +74,54 @@ export interface CanonicalPrice {
   tiers: { minimumQuantity: number; unitPrice: string }[]
 }
 
+/** Een bedrukpositie op een artikel, met wat daar technisch kan. */
+export interface CanonicalPrintPosition {
+  /** Code van de leverancier, bijvoorbeeld FRONT of ROUNDSCREEN. */
+  positionCode: string
+  /** Maximale bedrukmaat in millimeters. */
+  maxWidthMm: number | null
+  maxHeightMm: number | null
+  techniques: {
+    /** Techniekcode van de leverancier. */
+    code: string
+    /** Nul betekent: geen begrenzing. */
+    maxColors: number
+    isDefault: boolean
+  }[]
+}
+
+/** Alle bedrukmogelijkheden van één artikel. */
+export interface CanonicalPrintData {
+  externalId: string
+  /** Manipulatiecode die de handlingprijs bepaalt; leeg betekent geen. */
+  manipulationCode: string | null
+  /** PDF met de drukposities ingetekend. */
+  templateUrl: string | null
+  positions: CanonicalPrintPosition[]
+}
+
+/** De drukprijslijst van een leverancier. */
+export interface CanonicalPrintPrices {
+  currency: string
+  validFrom: Date | null
+  validUntil: Date | null
+  manipulations: { code: string; description: string | null; pricePerPiece: string }[]
+  techniques: {
+    code: string
+    name: string
+    pricingType: PrintPricingType
+    setup: string | null
+    setupRepeat: string | null
+    nextColourCostIndicator: boolean
+    /**
+     * De staffels per oppervlaktebereik, in de vorm waarin de calculatie ze
+     * verwacht. Bewust niet `unknown`: dat verbergt een verkeerde veldnaam
+     * tot het moment dat er gerekend wordt.
+     */
+    varCosts: PrintVarCost[]
+  }[]
+}
+
 /** Voorraad per variant, met de eerstvolgende verwachte leveringen. */
 export interface CanonicalStock {
   sku: string
@@ -116,6 +165,8 @@ export interface SupplierConnector {
   parseProduct?(payload: unknown): CanonicalProduct
   fetchPrices?(context: ConnectorContext): Promise<FetchedRecord<CanonicalPrice>[]>
   fetchStock?(context: ConnectorContext): Promise<FetchedRecord<CanonicalStock>[]>
+  fetchPrintData?(context: ConnectorContext): Promise<FetchedRecord<CanonicalPrintData>[]>
+  fetchPrintPrices?(context: ConnectorContext): Promise<CanonicalPrintPrices>
 }
 
 /**

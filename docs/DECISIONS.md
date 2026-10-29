@@ -23,6 +23,7 @@ nieuwe die de oude vervangt.
 | [0013](architecture/0013-midocean-rest-koppeling.md) | midocean als eerste koppeling, via REST; bestellen voorbereid maar niet gebouwd | besloten 2026-10-28, op basis van hun handleiding v1.12.2; paragraaf 4 gecorrigeerd door ADR-0014 |
 | [0014](architecture/0014-vergelijken-altijd-hash-alleen-voor-opslag.md) | De importvergelijking draait altijd; de hash bepaalt alleen of de ruwe payload opnieuw wordt vastgelegd | besloten 2026-10-28, tijdens het bouwen gebleken |
 | [0015](architecture/0015-voorraad-gaat-buiten-de-beoordeling-om.md) | Voorraad wordt rechtstreeks weggeschreven: het is een meting, geen eigenschap, en overschrijft niets van ons | besloten 2026-10-28 |
+| [0016](architecture/0016-drukprijzen-worden-berekend-niet-opgeslagen.md) | Drukprijzen van een leverancier worden bewaard als prijsstructuur en bij het calculeren uitgerekend; omrekenen naar eigen staffels kan niet | besloten 2026-10-29 |
 
 ## 1b. Bevestigd op 2026-10-28
 

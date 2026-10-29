@@ -113,6 +113,13 @@ export class StagedChangesService {
           'te passen. Draai eerst een echte import.',
       )
     }
+    if (wijziging.entityType === 'ProductPrintOptions') {
+      const productId = await this.zetBedrukopties(wijziging)
+      await this.rondAf(wijziging, productId, 'Product')
+      resultaat.applied++
+      return
+    }
+
     if (wijziging.entityType === 'ProductSupplier') {
       const koppelingId = await this.wijzigInkoopprijs(wijziging)
       await this.rondAf(wijziging, koppelingId, 'ProductSupplier')
@@ -224,6 +231,100 @@ export class StagedChangesService {
     })
 
     return koppeling.id
+  }
+
+  /**
+   * Bedrukopties van een product vervangen door wat de leverancier opgeeft.
+   *
+   * Anders dan bij een nieuw product komen de gegevens hier uit de
+   * voorgestelde wijziging zelf en niet uit `raw_supplier_products`: die tabel
+   * houdt één payload per artikel bij, en dat is de catalogus. De
+   * bedrukgegevens zijn compact genoeg om in het voorstel mee te gaan, en
+   * daarmee is ook hier terug te zien waar een optie vandaan komt.
+   */
+  private async zetBedrukopties(wijziging: VolledigeWijziging): Promise<string> {
+    if (!wijziging.entityId) {
+      throw new PreconditionError('Deze wijziging verwijst niet naar een product.')
+    }
+
+    const product = await this.prisma.db.product.findUnique({
+      where: { id: wijziging.entityId },
+      select: { id: true },
+    })
+    if (!product) throw new NotFoundError('Het product van deze wijziging bestaat niet meer.')
+
+    const manipulatie = wijziging.diff.printManipulationCode as
+      | { van: string | null; naar: string | null }
+      | undefined
+    const opties = (wijziging.diff.bedrukopties as { naar: BedrukOptie[] } | undefined)?.naar ?? []
+
+    // Technieken en posities zijn bij de import al vastgelegd; hier worden ze
+    // alleen opgezocht. Ontbreekt er een, dan is de import niet gedraaid.
+    const technieken = new Map(
+      (await this.prisma.db.printMethod.findMany({
+        where: { key: { in: opties.map((o) => `midocean-${o.techniek.toLowerCase()}`) } },
+        select: { id: true, key: true },
+      })).map((m) => [m.key, m.id]),
+    )
+    const posities = new Map(
+      (await this.prisma.db.printPosition.findMany({
+        where: {
+          key: { in: opties.map((o) => `midocean-${o.positie.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`) },
+        },
+        select: { id: true, key: true },
+      })).map((p) => [p.key, p.id]),
+    )
+
+    await this.prisma.unscoped.$transaction(async (tx) => {
+      if (manipulatie) {
+        await tx.product.update({
+          where: { id: product.id },
+          data: { printManipulationCode: manipulatie.naar },
+        })
+      }
+
+      // Vervangen en niet samenvoegen: een positie die de leverancier niet
+      // meer aanbiedt hoort te verdwijnen, anders blijft hij offreerbaar.
+      // Dit raakt geen order: een offerteregel kopieert zijn bedrukking.
+      await tx.productPrintOption.deleteMany({ where: { productId: product.id } })
+
+      for (const optie of opties) {
+        const methodId = technieken.get(`midocean-${optie.techniek.toLowerCase()}`)
+        const positionId = posities.get(
+          `midocean-${optie.positie.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        )
+        if (!methodId || !positionId) continue
+
+        await tx.productPrintOption.upsert({
+          where: {
+            productId_printMethodId_printPositionId: {
+              productId: product.id,
+              printMethodId: methodId,
+              printPositionId: positionId,
+            },
+          },
+          update: {
+            positionLabel: optie.positie,
+            supplierTechniqueCode: optie.techniek,
+            maxColors: optie.maxColors,
+            maxPrintWidthMm: optie.maxWidthMm,
+            maxPrintHeightMm: optie.maxHeightMm,
+          },
+          create: {
+            productId: product.id,
+            printMethodId: methodId,
+            printPositionId: positionId,
+            positionLabel: optie.positie,
+            supplierTechniqueCode: optie.techniek,
+            maxColors: optie.maxColors,
+            maxPrintWidthMm: optie.maxWidthMm,
+            maxPrintHeightMm: optie.maxHeightMm,
+          },
+        })
+      }
+    })
+
+    return product.id
   }
 
   /** De administratie na een geslaagde toepassing. */
@@ -507,6 +608,15 @@ export class StagedChangesService {
     }
     return schoon
   }
+}
+
+/** Een bedrukoptie zoals die in een voorgestelde wijziging staat. */
+interface BedrukOptie {
+  positie: string
+  techniek: string
+  maxColors: number
+  maxWidthMm: number | null
+  maxHeightMm: number | null
 }
 
 /** Een voorgestelde wijziging met de import en de koppeling erbij. */

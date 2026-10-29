@@ -46,6 +46,7 @@ export function Calculator({
   const [quantity, setQuantity] = useState('250')
   const [customerId, setCustomerId] = useState('')
   const [gekozenDruk, setGekozenDruk] = useState<Record<string, number>>({})
+  const [oppervlak, setOppervlak] = useState<Record<string, string>>({})
   const [manueel, setManueel] = useState('')
   const [korting, setKorting] = useState('0')
   const [drukMarge, setDrukMarge] = useState('')
@@ -99,6 +100,7 @@ export function Calculator({
           ...(customerId ? { customerId } : {}),
           printOptionIds: ids,
           printColors: ids.map((id) => gekozenDruk[id]),
+          printAreaCm2: ids.map((id) => (oppervlak[id] || '0').replace(',', '.')),
           ...(manueel ? { manualUnitSalePrice: manueel.replace(',', '.') } : {}),
           ...(drukMarge ? { printMarginPercent: drukMarge.replace(',', '.') } : {}),
           discountPercent: korting.replace(',', '.') || '0',
@@ -190,6 +192,10 @@ export function Calculator({
         {product!.printOptions.length > 0 && (
           <fieldset className="mt-5">
             <legend className="text-sm font-medium text-ink-soft">Bedrukking</legend>
+            <p className="mt-1 text-xs text-ink-faint">
+              Het logoformaat is alleen nodig bij technieken die per oppervlak rekenen; die
+              weigeren zonder.
+            </p>
             <div className="mt-2 grid gap-2">
               {product!.printOptions.map((optie) => {
                 const aan = optie.id in gekozenDruk
@@ -212,20 +218,40 @@ export function Calculator({
                       {optie.printMethodName} op {optie.printPositionName}
                     </label>
                     {aan && (
-                      <label className="flex items-center gap-2 text-xs text-ink-soft">
-                        kleuren
-                        <Input
-                          type="number"
-                          min={1}
-                          max={optie.maxColors || 12}
-                          value={gekozenDruk[optie.id]}
-                          onChange={(e) =>
-                            setGekozenDruk((g) => ({ ...g, [optie.id]: Number(e.target.value) || 1 }))
-                          }
-                          className="h-7 w-16"
-                        />
-                        <span className="text-ink-faint">max {optie.maxColors}</span>
-                      </label>
+                      <>
+                        <label className="flex items-center gap-2 text-xs text-ink-soft">
+                          kleuren
+                          <Input
+                            type="number"
+                            min={1}
+                            max={optie.maxColors || 12}
+                            value={gekozenDruk[optie.id]}
+                            onChange={(e) =>
+                              setGekozenDruk((g) => ({ ...g, [optie.id]: Number(e.target.value) || 1 }))
+                            }
+                            className="h-7 w-16"
+                          />
+                          <span className="text-ink-faint">
+                            {optie.maxColors === 0 ? 'onbeperkt' : `max ${optie.maxColors}`}
+                          </span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-ink-soft">
+                          logo cm²
+                          <Input
+                            value={oppervlak[optie.id] ?? ''}
+                            placeholder="bv. 12"
+                            onChange={(e) =>
+                              setOppervlak((o) => ({ ...o, [optie.id]: e.target.value }))
+                            }
+                            className="h-7 w-20"
+                          />
+                          {optie.maxPrintWidthMm && optie.maxPrintHeightMm && (
+                            <span className="text-ink-faint">
+                              max {optie.maxPrintWidthMm} × {optie.maxPrintHeightMm} mm
+                            </span>
+                          )}
+                        </label>
+                      </>
                     )}
                   </div>
                 )

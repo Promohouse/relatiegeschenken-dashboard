@@ -59,6 +59,7 @@ Legenda: ✅ gereed · ◻ te doen · ⏸ wacht op informatie of besluit
 | ◻ | Handmatige invoer | een product volledig aanmaken zonder import |
 | ◻ | **CSV/XLSX-import** met diff-review | proefimport toont wijzigingen vóór toepassen; ontbrekende producten worden gemarkeerd, **niet verwijderd** |
 | ✅ | Connectorlaag en midocean-koppeling | gereed: versleutelde credentials, connector-register, midocean REST (catalogus, prijzen, voorraad), proefimport die niets wegschrijft, verschillen in `staged_changes`, ontbrekende artikelen als voorstel tot inactief. Toepassen volgt |
+| ✅ | Drukgegevens en drukprijzen | gereed: bedrukposities en technieken per artikel, de prijsstructuur van de leverancier met vijf prijstypes, handling per manipulatiecode; de calculator rekent de drukprijs uit zoals de leverancier dat doet (ADR-0016) |
 | ✅ | Voorraadimport | gereed: standen per variant, twee keer per dag, rechtstreeks weggeschreven zonder beoordeling (ADR-0015); op het productscherm met het tijdstip en de eerstvolgende levering erbij |
 | ◻ | Inkoopprijs per variant | gemeten: 291 van de 2786 midocean-artikelen (10%) hebben varianten met verschillende prijzen, vooral textielmaten maar ook kleuren. Nu worden die artikelen gemeld en overgeslagen; ze moeten met de hand. Dit is een schemawijziging en raakt de prijsengine |
 | ✅ | Prijsimport (inkoopprijzen en staffels) | gereed: prijzen per variant gekoppeld aan het artikel via de vastgelegde catalogus; verschillende prijzen binnen één artikel worden gemeld en niet gekozen; staffels worden vervangen, niet gestapeld |

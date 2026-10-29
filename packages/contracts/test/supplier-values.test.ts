@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import Decimal from 'decimal.js'
 import {
   parseSupplierDecimal, parseOptionalSupplierDecimal, parseSupplierInteger,
-  parseSupplierBoolean, SupplierValueError,
+  parseSupplierQuantity, parseSupplierBoolean, SupplierValueError,
 } from '../src/supplier-values'
 
 describe('bedragen uit leveranciersdata', () => {
@@ -75,5 +75,30 @@ describe('aantallen en vlaggen', () => {
     expect(parseSupplierBoolean('false')).toBe(false)
     expect(parseSupplierBoolean(true)).toBe(true)
     expect(() => parseSupplierBoolean('misschien', 'printable')).toThrow(SupplierValueError)
+  })
+})
+
+describe('aantallen met een duizendtalscheidingsteken', () => {
+  // midocean schrijft staffeldrempels als "1.000" terwijl bedragen in
+  // hetzelfde bestand een decimale komma hebben. Zonder onderscheid wordt een
+  // staffel vanaf duizend stuks er een vanaf één stuk, en geldt de scherpste
+  // prijs meteen bij het eerste exemplaar.
+  it('leest 1.000 als duizend en niet als één', () => {
+    expect(parseSupplierQuantity('1.000')).toBe(1000)
+    expect(parseSupplierQuantity('2.500')).toBe(2500)
+    expect(parseSupplierQuantity('10.000')).toBe(10000)
+    expect(parseSupplierQuantity('1.000.000')).toBe(1000000)
+  })
+
+  it('laat gewone aantallen met rust', () => {
+    expect(parseSupplierQuantity('1')).toBe(1)
+    expect(parseSupplierQuantity('250')).toBe(250)
+    expect(parseSupplierQuantity(500)).toBe(500)
+  })
+
+  it('weigert een gebroken getal, ook als het op duizendtallen lijkt', () => {
+    // Drie cijfers achter de punt maakt het een duizendtal; anders niet.
+    expect(() => parseSupplierQuantity('1.5', 'minimum_quantity')).toThrow(SupplierValueError)
+    expect(() => parseSupplierQuantity('2,5', 'minimum_quantity')).toThrow(SupplierValueError)
   })
 })

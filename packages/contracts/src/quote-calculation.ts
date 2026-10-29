@@ -194,6 +194,12 @@ export const calculateQuoteLineSchema = z.object({
   printOptionIds: z.array(z.string().uuid()).default([]),
   /** Aantal kleuren per gekozen bedrukoptie, in dezelfde volgorde. */
   printColors: z.array(z.coerce.number().int().min(1).max(12)).default([]),
+  /**
+   * Oppervlak van het logo in cm2 per gekozen bedrukoptie, in dezelfde
+   * volgorde. Nodig bij technieken die per oppervlak rekenen; die weigeren
+   * zonder.
+   */
+  printAreaCm2: z.array(z.coerce.number().min(0).max(100000)).default([]),
   printMarginPercent: z.coerce.number().min(0).max(99.99).optional(),
   manualUnitSalePrice: z.coerce.number().min(0).optional(),
   discountPercent: z.coerce.number().min(0).max(100).default(0),

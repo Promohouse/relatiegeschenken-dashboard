@@ -73,6 +73,29 @@ export function parseSupplierInteger(waarde: unknown, veld = 'aantal'): number {
   return getal.toNumber()
 }
 
+/** Duizendtalnotatie: 1.000 of 2.500, maar ook 1.000.000. */
+const DUIZENDTALLEN = /^-?\d{1,3}(\.\d{3})+$/
+
+/**
+ * Een aantal dat met een duizendtalscheidingsteken geschreven kan zijn.
+ *
+ * Nodig omdat midocean in de drukprijslijst staffeldrempels schrijft als
+ * `"1.000"` en `"2.500"`, terwijl bedragen in hetzelfde bestand een decimale
+ * komma gebruiken. Zonder dit onderscheid wordt een staffel vanaf duizend
+ * stuks gelezen als een staffel vanaf één stuk, en geldt de prijs voor grote
+ * aantallen meteen bij de eerste - een fout die niemand opmerkt tot de
+ * inkoopfactuur binnenkomt.
+ *
+ * Een punt telt alleen als duizendtalteken bij precies drie cijfers erachter.
+ * `"1.5"` is dus nog steeds een gebroken getal en wordt geweigerd.
+ */
+export function parseSupplierQuantity(waarde: unknown, veld = 'aantal'): number {
+  if (typeof waarde === 'string' && DUIZENDTALLEN.test(waarde.trim())) {
+    return parseSupplierInteger(waarde.trim().replace(/\./g, ''), veld)
+  }
+  return parseSupplierInteger(waarde, veld)
+}
+
 /**
  * Een ja/nee-veld. midocean schrijft `"yes"`/`"no"` en `"true"`/`"false"`
  * door elkaar, afhankelijk van het veld.

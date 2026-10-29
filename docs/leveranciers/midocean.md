@@ -165,6 +165,15 @@ Appendix F van de handleiding geeft vier doorgerekende voorbeelden met de
 verwachte totalen. Die staan als test in `packages/contracts/test/midocean-print-price.test.ts`,
 zodat onze berekening aantoonbaar hetzelfde uitkomt als die van midocean.
 
+**Drie dingen die de echte prijslijst anders doet** (gemeten 29-10-2026):
+
+- `next_colour_cost_indicator` bevat `"true"`/`"false"`, niet `"X"` zoals de
+  handleiding zegt;
+- staffeldrempels dragen een duizendtalpunt: `"1.000"`, `"2.500"`. Bedragen in
+  hetzelfde bestand gebruiken juist een decimale komma;
+- er bestaat een vijfde prijstype `Area` (prijs per cm2, techniek DPT) dat niet
+  in de handleiding staat. Onze formule daarvoor is afgeleid, niet bevestigd.
+
 **Twee onopgeloste punten in die appendix**, die wij niet kunnen wegpoetsen:
 
 - Rij 1 noemt een setup van `29,25` en rekent `29,25 * 3 = 88,5`. Dat is
@@ -229,6 +238,10 @@ het product. De kleurcode uit de bestelling heet bij midocean
 5. Hoe groot is de volledige productrespons? Dat bepaalt of wij hem kunnen
    streamen of in het geheugen mogen laden.
 6. Een testsleutel voor `apitest.midocean.com`.
+7. Klopt onze formule voor prijstype `Area`: prijs maal oppervlak in cm2 maal
+   aantal? Techniek DPT is de enige die het gebruikt.
+8. Waarom dragen staffeldrempels in de drukprijslijst een duizendtalpunt
+   terwijl bedragen een decimale komma hebben? Blijft dat zo?
 
 ## Grenzen die wij onszelf opleggen
 

@@ -6,7 +6,8 @@ import { z } from 'zod'
  */
 
 export const connectorCapabilitySchema = z.enum([
-  'CATALOG', 'MEDIA', 'PRICE_TIERS', 'INVENTORY', 'PLACE_ORDER', 'ORDER_STATUS', 'SHIPPING',
+  'CATALOG', 'MEDIA', 'PRICE_TIERS', 'INVENTORY', 'PRINT_DATA',
+  'PLACE_ORDER', 'ORDER_STATUS', 'SHIPPING',
 ])
 
 export const startImportSchema = z.object({

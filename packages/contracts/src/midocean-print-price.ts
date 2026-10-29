@@ -25,6 +25,15 @@ export type PrintPricingType =
   | 'NumberOfColours'
   | 'AreaRange'
   | 'ColourAreaRange'
+  /**
+   * Prijs per vierkante centimeter. Staat **niet** in hun handleiding; op
+   * 29-10-2026 in de echte prijslijst aangetroffen bij techniek DPT (digitale
+   * textieldruk). De formule hieronder - prijs x oppervlak x aantal - is
+   * afgeleid uit het feit dat AreaRange uitdrukkelijk zegt dat je daar *niet*
+   * met het oppervlak hoeft te vermenigvuldigen. Dat is een redenering, geen
+   * bevestiging: zie de vragenlijst in docs/leveranciers/midocean.md.
+   */
+  | 'Area'
 
 export interface PrintPriceScale {
   /** Vanaf welk aantal stuks deze prijs geldt. */
@@ -52,8 +61,12 @@ export interface PrintTechniquePrice {
   /** Lagere setup bij een herhaalorder; leeg betekent: geen korting. */
   setupRepeat?: Decimal.Value | null
   /**
-   * "X" betekent: vanaf de tweede kleur geldt `nextPrice`. Elke andere waarde
-   * (waaronder "false" en leeg) betekent: elke kleur kost hetzelfde.
+   * Vanaf de tweede kleur geldt `nextPrice`.
+   *
+   * De handleiding zegt dat hier "X" staat. In de echte prijslijst staat
+   * "true" of "false" (gemeten 29-10-2026). Beide worden herkend; zou midocean
+   * ooit weer "X" sturen, dan blijft dat werken. Alles wat geen van drieën is
+   * betekent: elke kleur kost hetzelfde.
    */
   nextColourCostIndicator?: string | null
 }
@@ -101,7 +114,16 @@ export class PrintPriceError extends Error {
 }
 
 const KLEURGEBASEERD: PrintPricingType[] = ['NumberOfColours', 'ColourAreaRange']
+/** Types die een bereik per oppervlak kennen en dus het formaat nodig hebben. */
 const OPPERVLAKTEGEBASEERD: PrintPricingType[] = ['AreaRange', 'ColourAreaRange']
+/** Types waarbij de prijs per vierkante centimeter geldt. */
+const PER_VIERKANTE_CENTIMETER: PrintPricingType[] = ['Area']
+
+/** Of de indicator zegt dat vervolgkleuren een eigen prijs hebben. */
+function vervolgkleurHeeftEigenPrijs(indicator: string | null | undefined): boolean {
+  const schoon = (indicator ?? '').trim().toLowerCase()
+  return schoon === 'x' || schoon === 'true'
+}
 
 /** Techniek met een witte onderlaag op gekleurde artikelen. */
 const WITTE_ONDERLAAG = 'ST'
@@ -114,6 +136,12 @@ const WITTE_ONDERLAAG = 'ST'
  * prijs - dat is een fout en geen nul.
  */
 function kiesBereik(varCosts: PrintVarCost[], input: PrintCostInput): PrintVarCost {
+  if (PER_VIERKANTE_CENTIMETER.includes(input.technique.pricingType) && input.areaCm2 == null) {
+    throw new PrintPriceError(
+      `Techniek ${input.technique.id} rekent per vierkante centimeter, dus het formaat van het ` +
+        'logo in cm2 is nodig.',
+    )
+  }
   if (!OPPERVLAKTEGEBASEERD.includes(input.technique.pricingType)) {
     const eerste = varCosts[0]
     if (!eerste) {
@@ -188,10 +216,14 @@ export function calculatePrintPositionCost(input: PrintCostInput): PrintCostBrea
   )
 
   // setup_repeat geldt alleen bij een herhaalorder, en alleen als hij bestaat.
+  // Een lege setup komt voor (techniek DPT heeft er geen) en betekent nul,
+  // niet "ontbreekt".
   const setupBasis =
     (input.isRepeat
       ? parseOptionalSupplierDecimal(technique.setupRepeat, `techniek ${technique.id} setup_repeat`)
-      : null) ?? parseSupplierDecimal(technique.setup, `techniek ${technique.id} setup`)
+      : null) ??
+    parseOptionalSupplierDecimal(technique.setup, `techniek ${technique.id} setup`) ??
+    new Decimal(0)
 
   // Bij de kleurgebaseerde types wordt per kleur voorbereid.
   const setupCost = KLEURGEBASEERD.includes(technique.pricingType)
@@ -201,11 +233,15 @@ export function calculatePrintPositionCost(input: PrintCostInput): PrintCostBrea
   let printCost: Decimal
   if (KLEURGEBASEERD.includes(technique.pricingType)) {
     const apartePrijsVoorVolgendeKleuren =
-      (technique.nextColourCostIndicator ?? '').trim().toUpperCase() === 'X' && volgendePrijs !== null
+      vervolgkleurHeeftEigenPrijs(technique.nextColourCostIndicator) && volgendePrijs !== null
 
     printCost = apartePrijsVoorVolgendeKleuren
       ? aantal.times(prijs).plus(aantal.times(volgendePrijs!).times(kleuren.minus(1)))
       : aantal.times(prijs).times(kleuren)
+  } else if (PER_VIERKANTE_CENTIMETER.includes(technique.pricingType)) {
+    // Prijs per cm2 maal het oppervlak maal het aantal. Zie de toelichting bij
+    // het prijstype: afgeleid, niet bevestigd.
+    printCost = aantal.times(prijs).times(new Decimal(input.areaCm2!))
   } else {
     // AreaRange en NumberOfPositions: het aantal kleuren doet niet mee.
     printCost = aantal.times(prijs)

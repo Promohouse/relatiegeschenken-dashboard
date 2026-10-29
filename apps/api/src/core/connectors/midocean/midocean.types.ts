@@ -90,3 +90,68 @@ export interface MidoceanStockResponse {
   modified_at?: string
   stock?: MidoceanStockItem[]
 }
+
+// --- Drukgegevens ----------------------------------------------------------
+
+export interface MidoceanPrintTechniqueOnPosition {
+  id?: string
+  /** "0" betekent geen begrenzing. */
+  max_colours?: string
+  default?: boolean | string
+}
+
+export interface MidoceanPrintPosition {
+  position_id?: string
+  print_size_unit?: string
+  max_print_size_height?: number | string
+  max_print_size_width?: number | string
+  print_position_type?: string
+  category?: string
+  printing_techniques?: MidoceanPrintTechniqueOnPosition[]
+}
+
+export interface MidoceanPrintProduct {
+  master_code?: string
+  master_id?: string
+  print_manipulation?: string | null
+  print_template?: string | null
+  item_color_numbers?: string[]
+  printing_positions?: MidoceanPrintPosition[]
+}
+
+export interface MidoceanPrintDataResponse {
+  /** Per techniek de naam in dertien talen, als lijst van eentalige objecten. */
+  printing_technique_descriptions?: { id?: string; name?: Record<string, string>[] }[]
+  products?: MidoceanPrintProduct[]
+}
+
+export interface MidoceanPrintScale {
+  minimum_quantity?: string
+  price?: string
+  next_price?: string
+}
+
+export interface MidoceanPrintVarCost {
+  range_id?: string
+  area_from?: string
+  area_to?: string
+  scales?: MidoceanPrintScale[]
+}
+
+export interface MidoceanPrintTechnique {
+  id?: string
+  description?: string
+  pricing_type?: string
+  setup?: string
+  setup_repeat?: string
+  next_colour_cost_indicator?: string
+  var_costs?: MidoceanPrintVarCost[]
+}
+
+export interface MidoceanPrintPriceResponse {
+  currency?: string
+  pricelist_valid_from?: string
+  pricelist_valid_until?: string
+  print_manipulations?: { code?: string; description?: string; price?: string }[]
+  print_techniques?: MidoceanPrintTechnique[]
+}

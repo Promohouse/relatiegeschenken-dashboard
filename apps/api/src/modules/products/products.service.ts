@@ -152,6 +152,8 @@ export class ProductsService {
         supplierLabel: o.positionLabel,
         maxColors: o.maxColors,
         printArea: o.printArea,
+        maxPrintWidthMm: o.maxPrintWidthMm?.toString() ?? null,
+        maxPrintHeightMm: o.maxPrintHeightMm?.toString() ?? null,
         setupCost: o.setupCost.toString(),
       })),
       salesTiers: product.salesTiers.map((t) => ({

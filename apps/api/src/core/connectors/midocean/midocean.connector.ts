@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common'
 import type { ConnectorCapability } from '@rgh/db'
-import { parseSupplierBoolean, parseSupplierInteger } from '@rgh/contracts'
+import {
+  parseSupplierBoolean, parseSupplierInteger, parseSupplierQuantity, type PrintPricingType,
+} from '@rgh/contracts'
 import {
   ConnectorError,
-  type CanonicalAsset, type CanonicalPrice, type CanonicalProduct, type CanonicalStock,
-  type CanonicalVariant, type ConnectorContext, type FetchedRecord, type SupplierConnector,
+  type CanonicalAsset, type CanonicalPrice, type CanonicalPrintData, type CanonicalPrintPrices,
+  type CanonicalProduct, type CanonicalStock, type CanonicalVariant, type ConnectorContext,
+  type FetchedRecord, type SupplierConnector,
 } from '../connector.types'
 import type {
-  MidoceanAsset, MidoceanPricelist, MidoceanProduct, MidoceanStockResponse, MidoceanVariant,
+  MidoceanAsset, MidoceanPricelist, MidoceanPrintDataResponse, MidoceanPrintPriceResponse,
+  MidoceanProduct, MidoceanStockResponse, MidoceanVariant,
 } from './midocean.types'
 
 /**
@@ -31,7 +35,9 @@ export type Ophaler = (url: string, init: { headers: Record<string, string> }) =
 @Injectable()
 export class MidoceanConnector implements SupplierConnector {
   readonly key = 'midocean-api'
-  readonly capabilities: ConnectorCapability[] = ['CATALOG', 'MEDIA', 'PRICE_TIERS', 'INVENTORY']
+  readonly capabilities: ConnectorCapability[] = [
+    'CATALOG', 'MEDIA', 'PRICE_TIERS', 'INVENTORY', 'PRINT_DATA',
+  ]
 
   /**
    * De ophaalfunctie is injecteerbaar zodat tests met opgeslagen antwoorden
@@ -182,6 +188,111 @@ export class MidoceanConnector implements SupplierConnector {
     return this.naarProduct(rauw)
   }
 
+  /**
+   * Bedrukposities en -technieken per artikel.
+   *
+   * De techniek staat per positie als code met een maximum aantal kleuren;
+   * nul betekent daar geen begrenzing. De namen van de technieken staan
+   * apart in hetzelfde bestand, in dertien talen.
+   */
+  async fetchPrintData(context: ConnectorContext): Promise<FetchedRecord<CanonicalPrintData>[]> {
+    const data = await this.haal<MidoceanPrintDataResponse>(context, '/gateway/printdata/1.0')
+
+    return (data.products ?? [])
+      .filter((p) => !!p.master_code)
+      .map((p) => ({
+        externalId: p.master_code!,
+        payload: p,
+        value: {
+          externalId: p.master_code!,
+          manipulationCode: p.print_manipulation?.trim() || null,
+          templateUrl: p.print_template?.trim() || null,
+          positions: (p.printing_positions ?? [])
+            .filter((pos) => !!pos.position_id)
+            .map((pos) => ({
+              positionCode: pos.position_id!.trim(),
+              maxWidthMm: getal(pos.max_print_size_width),
+              maxHeightMm: getal(pos.max_print_size_height),
+              techniques: (pos.printing_techniques ?? [])
+                .filter((t) => !!t.id)
+                .map((t) => ({
+                  code: t.id!.trim(),
+                  maxColors: optioneelAantal(t.max_colours) ?? 0,
+                  isDefault: t.default === true || t.default === 'true',
+                })),
+            })),
+        },
+      }))
+  }
+
+  /**
+   * De drukprijslijst: handlingcodes en technieken met hun prijsstructuur.
+   *
+   * De structuur gaat onbewerkt door. Omrekenen naar eigen staffels kan niet:
+   * twee van de vijf prijstypes hangen af van het oppervlak van het logo, en
+   * dat is pas bekend tijdens het calculeren (ADR-0016).
+   */
+  async fetchPrintPrices(context: ConnectorContext): Promise<CanonicalPrintPrices> {
+    const data = await this.haal<MidoceanPrintPriceResponse>(context, '/gateway/printpricelist/2.0')
+    const namen = await this.techniekNamen(context)
+
+    return {
+      currency: data.currency ?? 'EUR',
+      validFrom: datum(data.pricelist_valid_from),
+      validUntil: datum(data.pricelist_valid_until),
+      manipulations: (data.print_manipulations ?? [])
+        .filter((m) => !!m.code && !!m.price)
+        .map((m) => ({
+          code: m.code!.trim(),
+          description: m.description?.trim() || null,
+          pricePerPiece: m.price!,
+        })),
+      techniques: (data.print_techniques ?? [])
+        .filter((t) => !!t.id)
+        .map((t) => ({
+          code: t.id!.trim(),
+          name: namen.get(t.id!.trim()) ?? t.description?.trim() ?? t.id!.trim(),
+          pricingType: (t.pricing_type?.trim() ?? 'NumberOfColours') as PrintPricingType,
+          setup: leegNaarNull(t.setup),
+          setupRepeat: leegNaarNull(t.setup_repeat),
+          // De handleiding noemt "X", de echte lijst gebruikt "true"/"false".
+          nextColourCostIndicator: ['x', 'true'].includes(
+            (t.next_colour_cost_indicator ?? '').trim().toLowerCase(),
+          ),
+          varCosts: (t.var_costs ?? []).map((v) => ({
+            rangeId: v.range_id?.trim() || null,
+            areaFrom: optioneelAantal(v.area_from) ?? 0,
+            areaTo: optioneelAantal(v.area_to) ?? 0,
+            scales: (v.scales ?? [])
+              .filter((sc) => !!sc.minimum_quantity && !!sc.price)
+              .map((sc) => ({
+                // Let op: staffeldrempels dragen een duizendtalpunt ("1.000").
+                minimumQuantity: parseSupplierQuantity(sc.minimum_quantity, 'minimum_quantity'),
+                price: sc.price!,
+                nextPrice: leegNaarNull(sc.next_price),
+              }))
+              .sort((a, b) => a.minimumQuantity - b.minimumQuantity),
+          })),
+        })),
+    }
+  }
+
+  /** Nederlandse technieknamen uit het drukgegevensbestand. */
+  private async techniekNamen(context: ConnectorContext): Promise<Map<string, string>> {
+    const taal = String(context.config.language ?? STANDAARDTAAL)
+    const data = await this.haal<MidoceanPrintDataResponse>(context, '/gateway/printdata/1.0')
+
+    const namen = new Map<string, string>()
+    for (const beschrijving of data.printing_technique_descriptions ?? []) {
+      if (!beschrijving.id) continue
+      // De naam komt als lijst van eentalige objecten: [{ "nl": "Blinddruk" }].
+      const vertalingen = Object.assign({}, ...(beschrijving.name ?? [])) as Record<string, string>
+      const naam = vertalingen[taal] ?? vertalingen.en
+      if (naam?.trim()) namen.set(beschrijving.id.trim(), naam.trim())
+    }
+    return namen
+  }
+
   private naarProduct(rauw: MidoceanProduct): CanonicalProduct {
     const varianten = (rauw.variants ?? []).filter((v) => !!v.sku)
     // De categorie staat per variant, niet op het product. Alle varianten van
@@ -248,6 +359,12 @@ const datum = (v: string | undefined): Date | null => {
   if (!v?.trim()) return null
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? null : d
+}
+
+const getal = (v: number | string | undefined): number | null => {
+  if (v === undefined || v === null || v === '') return null
+  const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'))
+  return Number.isFinite(n) ? n : null
 }
 
 const optioneelAantal = (v: number | string | undefined): number | null => {

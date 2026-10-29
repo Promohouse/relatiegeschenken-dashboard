@@ -234,3 +234,55 @@ describe('weigeren in plaats van gokken', () => {
     expect(() => calculatePrintCost([])).toThrow(/zonder drukpositie/)
   })
 })
+
+describe('wat de echte prijslijst anders doet dan de handleiding', () => {
+  // Gemeten op 29-10-2026 tegen api.midocean.com. Drie afwijkingen, elk met
+  // gevolgen voor de prijs.
+
+  it('herkent "true" als indicator voor een eigen vervolgkleurprijs', () => {
+    // De handleiding noemt "X". De echte lijst gebruikt "true"/"false". Met
+    // alleen de X-controle zou de goedkopere vervolgkleur nooit gelden en
+    // werd elke kleur voor de volle prijs gerekend.
+    const invoer: PrintCostInput = {
+      technique: { id: 'P0', pricingType: 'NumberOfColours', setup: '27,50', nextColourCostIndicator: 'true' },
+      varCosts: enkelBereik([{ minimumQuantity: 1, price: '0,40', nextPrice: '0,10' }]),
+      quantity: 100,
+      colours: 3,
+    }
+    // 100 * 0,40 + 100 * 0,10 * 2 = 40 + 20.
+    expect(calculatePrintPositionCost(invoer).printCost.toFixed(2)).toBe('60.00')
+
+    const uit = calculatePrintPositionCost({
+      ...invoer,
+      technique: { ...invoer.technique, nextColourCostIndicator: 'false' },
+    })
+    expect(uit.printCost.toFixed(2)).toBe('120.00')
+  })
+
+  it('kent het prijstype Area, dat niet in de handleiding staat', () => {
+    // Techniek DPT, digitale textieldruk: prijs per cm2, geen setup.
+    const invoer: PrintCostInput = {
+      technique: { id: 'DPT', pricingType: 'Area', setup: '', setupRepeat: '' },
+      varCosts: enkelBereik([{ minimumQuantity: 1, price: '0,011' }]),
+      quantity: 100,
+      colours: 1,
+      areaCm2: 150,
+    }
+    const uitkomst = calculatePrintPositionCost(invoer)
+    // 100 * 0,011 * 150 cm2.
+    expect(uitkomst.printCost.toFixed(2)).toBe('165.00')
+    // Een lege setup is nul, geen fout.
+    expect(uitkomst.setupCost.toFixed(2)).toBe('0.00')
+  })
+
+  it('weigert een prijs per cm2 zonder formaat', () => {
+    expect(() =>
+      calculatePrintPositionCost({
+        technique: { id: 'DPT', pricingType: 'Area', setup: '' },
+        varCosts: enkelBereik([{ minimumQuantity: 1, price: '0,011' }]),
+        quantity: 100,
+        colours: 1,
+      }),
+    ).toThrow(/per vierkante centimeter/)
+  })
+})

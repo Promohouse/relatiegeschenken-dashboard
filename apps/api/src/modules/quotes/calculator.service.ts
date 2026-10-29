@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import {
-  calculateQuoteLine, selectTier,
-  type CalculateQuoteLine, type PrintPositionInput, type QuoteLineCalculation,
+  calculatePrintPositionCost, calculateQuoteLine, parseSupplierDecimal, selectTier,
+  type CalculateQuoteLine, type PrintPositionInput, type PrintPricingType,
+  type PrintVarCost, type QuoteLineCalculation,
 } from '@rgh/contracts'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { PricingService } from '../../core/pricing/pricing.service'
@@ -137,8 +138,12 @@ export class CalculatorService {
         printMethod: { select: { name: true } },
         printPosition: { select: { name: true } },
         priceTiers: true,
+        product: { select: { printManipulationCode: true } },
       },
     })
+
+    // De drukprijslijst van de leverancier van dit product, als die er is.
+    const leveranciersprijzen = await this.drukprijslijst(input)
 
     const posities: PrintPositionInput[] = []
     for (const [index, optieId] of input.printOptionIds.entries()) {
@@ -155,6 +160,17 @@ export class CalculatorService {
           `${optie.printMethod.name} op ${optie.printPosition.name} kan hoogstens ` +
             `${optie.maxColors} ${optie.maxColors === 1 ? 'kleur' : 'kleuren'}.`,
         )
+      }
+
+      // Eerst de weg van de leverancier: die rekent met een prijsstructuur en
+      // niet met vaste staffels, want twee van zijn vijf prijstypes hangen af
+      // van het formaat van het logo (ADR-0016).
+      const viaLeverancier = await this.drukprijsViaLeverancier(
+        optie, kleuren, index, input, leveranciersprijzen, waarschuwingen,
+      )
+      if (viaLeverancier) {
+        posities.push(viaLeverancier)
+        continue
       }
 
       // Eerst de staffels voor dit aantal kleuren; daarbinnen het aantal stuks.
@@ -187,6 +203,129 @@ export class CalculatorService {
       })
     }
     return posities
+  }
+
+  /**
+   * De drukprijslijst van de leverancier die dit product levert.
+   *
+   * Null als er geen koppeling of geen prijslijst is; dan vallen we terug op
+   * onze eigen drukstaffels.
+   */
+  private async drukprijslijst(input: CalculateQuoteLine) {
+    const koppeling = await this.prisma.db.productSupplier.findFirst({
+      where: {
+        productId: input.productId,
+        ...(input.productSupplierId ? { id: input.productSupplierId } : { isActive: true }),
+      },
+      orderBy: [{ isPreferred: 'desc' }, { purchasePrice: 'asc' }],
+      select: { supplierId: true },
+    })
+    if (!koppeling) return null
+
+    const verbinding = await this.prisma.db.supplierConnection.findFirst({
+      where: { supplierId: koppeling.supplierId, printTechniques: { some: {} } },
+      select: { id: true },
+    })
+    if (!verbinding) return null
+
+    const [technieken, manipulaties] = await Promise.all([
+      this.prisma.db.supplierPrintTechnique.findMany({ where: { connectionId: verbinding.id } }),
+      this.prisma.db.supplierPrintManipulation.findMany({ where: { connectionId: verbinding.id } }),
+    ])
+
+    return {
+      technieken: new Map(technieken.map((t) => [t.code, t])),
+      manipulaties: new Map(manipulaties.map((m) => [m.code, m])),
+    }
+  }
+
+  /**
+   * De drukprijs uitrekenen zoals de leverancier hem rekent.
+   *
+   * Geeft null terug als dat niet kan - geen prijslijst, geen techniekcode -
+   * zodat de aanroeper op onze eigen staffels kan terugvallen. Lukt het wel
+   * maar ontbreekt er iets dat de gebruiker moet weten, dan komt dat als
+   * waarschuwing mee.
+   */
+  private async drukprijsViaLeverancier(
+    optie: {
+      supplierTechniqueCode: string | null
+      printMethod: { name: string }
+      printPosition: { name: string }
+      positionLabel: string | null
+      product: { printManipulationCode: string | null }
+    },
+    kleuren: number,
+    /** Plaats in de gekozen bedrukkingen; de invoervelden lopen gelijk op. */
+    index: number,
+    input: CalculateQuoteLine,
+    prijslijst: Awaited<ReturnType<CalculatorService['drukprijslijst']>>,
+    waarschuwingen: string[],
+  ): Promise<PrintPositionInput | null> {
+    if (!prijslijst || !optie.supplierTechniqueCode) return null
+
+    const techniek = prijslijst.technieken.get(optie.supplierTechniqueCode)
+    if (!techniek) return null
+
+    const handling = optie.product.printManipulationCode
+      ? prijslijst.manipulaties.get(optie.product.printManipulationCode)
+      : null
+
+    const positienaam = optie.positionLabel ?? optie.printPosition.name
+    // De invoervelden lopen gelijk op met de gekozen bedrukkingen.
+    const oppervlak = input.printAreaCm2?.[index] ?? null
+
+    try {
+      const uitkomst = calculatePrintPositionCost({
+        technique: {
+          id: techniek.code,
+          pricingType: techniek.pricingType as PrintPricingType,
+          setup: techniek.setup?.toString() ?? '0',
+          setupRepeat: techniek.setupRepeat?.toString() ?? null,
+          nextColourCostIndicator: techniek.nextColourCostIndicator ? 'true' : 'false',
+        },
+        varCosts: techniek.varCosts as unknown as PrintVarCost[],
+        manipulationPrice: handling?.pricePerPiece.toString() ?? null,
+        quantity: input.quantity,
+        colours: kleuren,
+        areaCm2: oppervlak,
+      })
+
+      // De berekening geeft het totaal voor deze positie; de calculator werkt
+      // per stuk, dus de handling zit al in de inkoopprijs per stuk.
+      const perStuk = uitkomst.printCost
+        .plus(uitkomst.handlingCost)
+        .dividedBy(input.quantity)
+
+      if (techniek.pricingType === 'Area') {
+        waarschuwingen.push(
+          `${techniek.name} rekent per vierkante centimeter. Die berekening staat niet in de ` +
+            'documentatie van midocean en is afgeleid; controleer het bedrag met een echte order.',
+        )
+      }
+
+      return {
+        positionName: positienaam,
+        methodName: optie.printMethod.name,
+        colors: kleuren,
+        unitPurchaseCost: perStuk.toFixed(4),
+        setupPurchaseCost: uitkomst.setupCost.toFixed(4),
+        marginPercent: input.printMarginPercent ?? null,
+      }
+    } catch (fout) {
+      waarschuwingen.push(
+        `De drukprijs van ${optie.printMethod.name} op ${positienaam} kon niet berekend worden: ` +
+          `${fout instanceof Error ? fout.message : String(fout)}`,
+      )
+      return {
+        positionName: positienaam,
+        methodName: optie.printMethod.name,
+        colors: kleuren,
+        unitPurchaseCost: '0',
+        setupPurchaseCost: '0',
+        marginPercent: input.printMarginPercent ?? null,
+      }
+    }
   }
 
   /** Het standaard btw-tarief uit de instellingen. */

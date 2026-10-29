@@ -251,6 +251,13 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   Clipper en Anda in `docs/leveranciers/koppelingen.md`.
 
 ### Gewijzigd
+- **Drie fouten in de drukprijsberekening, gevonden door de echte prijslijst
+  te vergelijken met de handleiding.** Alle drie zouden ze een verkeerde prijs
+  hebben gegeven: de indicator voor een goedkopere vervolgkleur blijkt
+  `"true"`/`"false"` te bevatten en niet `"X"`; staffeldrempels dragen een
+  duizendtalpunt, zodat `"1.000"` als 1 gelezen werd en de scherpste prijs al
+  bij één stuk zou gelden; en er bestaat een vijfde prijstype dat niet in de
+  handleiding staat.
 - **De calculator zoekt een product in plaats van het uit een lijst te kiezen.**
   Met 2790 artikelen is een keuzelijst onbruikbaar; bovendien toonde die
   alleen de eerste honderd. Nu typ je een artikelnummer of naam. Is er precies

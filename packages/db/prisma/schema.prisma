@@ -578,15 +578,18 @@ model Product {
   /// Productkenmerken die leveranciers aanleveren en die een klant vraagt.
   /// Allemaal optioneel: niet elke leverancier levert ze, en leeg is iets
   /// anders dan onbekend.
-  material        String?
+  material              String?
   /// Afmetingen zoals de leverancier ze schrijft, bijvoorbeeld "21X14X1,6 CM".
-  dimensions      String?
+  dimensions            String?
   /// Landcode van herkomst, twee letters.
-  countryOfOrigin String?
+  countryOfOrigin       String?
   /// Goederencode voor douane en intrastat.
-  commodityCode   String?
+  commodityCode         String?
   /// Of er op bedrukt kan worden volgens de leverancier.
-  printable       Boolean?
+  printable             Boolean?
+  /// Manipulatiecode van de leverancier (A-Z): bepaalt de handlingprijs per
+  /// stuk bij bedrukken. Leeg betekent geen handlingkosten.
+  printManipulationCode String?
 
   isActive Boolean @default(true)
 
@@ -743,12 +746,17 @@ model ProductPrintOption {
 
   /// De benaming zoals de leverancier die aanlevert. De genormaliseerde
   /// positie staat in printPosition; dit veld bewaart het origineel.
-  positionLabel String?
-  maxColors     Int     @default(1)
+  positionLabel         String?
+  /// Techniekcode van de leverancier, voor het opzoeken van de drukprijs.
+  supplierTechniqueCode String?
+  /// Maximale bedrukmaat in millimeters, zoals de leverancier die opgeeft.
+  maxPrintWidthMm       Decimal? @db.Decimal(10, 2)
+  maxPrintHeightMm      Decimal? @db.Decimal(10, 2)
+  maxColors             Int      @default(1)
   /// Maximale bedrukkingsafmeting, vrije tekst zoals leveranciers die geven.
-  printArea     String?
+  printArea             String?
   /// Instelkosten per order, los van de stuksprijs.
-  setupCost     Decimal @default(0) @db.Decimal(14, 4)
+  setupCost             Decimal  @default(0) @db.Decimal(14, 4)
 
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1449,6 +1457,8 @@ enum ConnectorCapability {
   MEDIA
   PRICE_TIERS
   INVENTORY
+  /// Bedrukposities, technieken en drukprijzen.
+  PRINT_DATA
   PLACE_ORDER
   ORDER_STATUS
   SHIPPING
@@ -1480,12 +1490,14 @@ model SupplierConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  capabilities  SupplierConnectionCapability[]
-  importRuns    ImportRun[]
-  rawProducts   RawSupplierProduct[]
-  stock         SupplierStock[]
-  fieldMappings FieldMapping[]
-  valueMappings ValueMapping[]
+  capabilities       SupplierConnectionCapability[]
+  importRuns         ImportRun[]
+  rawProducts        RawSupplierProduct[]
+  stock              SupplierStock[]
+  printTechniques    SupplierPrintTechnique[]
+  printManipulations SupplierPrintManipulation[]
+  fieldMappings      FieldMapping[]
+  valueMappings      ValueMapping[]
 
   @@index([supplierId])
   @@map("supplier_connections")
@@ -1577,6 +1589,57 @@ model ImportItem {
 
 /// Ruwe leveranciersdata, onaangetast bewaard. De hash voorkomt dat
 /// ongewijzigde artikelen opnieuw verwerkt worden.
+/// Een drukprijslijst van een leverancier, zoals hij hem aanlevert.
+///
+/// Niet omgerekend naar onze eigen staffels, want dat kan niet: twee van de
+/// vijf prijstypes van midocean hangen af van het oppervlak van het logo, en
+/// dat is pas bekend op het moment dat er gecalculeerd wordt. Daarom staat de
+/// structuur hier zoals de leverancier hem geeft en rekent de calculator hem
+/// uit. Zie ADR-0016.
+model SupplierPrintTechnique {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  /// Techniekcode van de leverancier, bijvoorbeeld S2, TD1, DPT.
+  code String
+  /// Naam in het Nederlands waar de leverancier die geeft.
+  name String
+
+  /// NumberOfPositions, NumberOfColours, AreaRange, ColourAreaRange of Area.
+  pricingType             String
+  setup                   Decimal? @db.Decimal(14, 4)
+  setupRepeat             Decimal? @db.Decimal(14, 4)
+  /// Of vanaf de tweede kleur een eigen prijs geldt.
+  nextColourCostIndicator Boolean  @default(false)
+
+  /// De staffels per oppervlaktebereik, zoals de leverancier ze aanlevert.
+  varCosts Json
+
+  validFrom  DateTime?
+  validUntil DateTime?
+  fetchedAt  DateTime  @default(now())
+
+  @@unique([connectionId, code])
+  @@map("supplier_print_techniques")
+}
+
+/// Handlingprijs per stuk, per manipulatiecode van de leverancier.
+model SupplierPrintManipulation {
+  id           String             @id @default(uuid()) @db.Uuid
+  connectionId String             @db.Uuid
+  connection   SupplierConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  code          String
+  description   String?
+  pricePerPiece Decimal @db.Decimal(14, 4)
+
+  fetchedAt DateTime @default(now())
+
+  @@unique([connectionId, code])
+  @@map("supplier_print_manipulations")
+}
+
 /// Voorraadstand zoals een leverancier die laatst meldde.
 ///
 /// Dit is geen catalogusgegeven maar een meting met een tijdstip: het zegt

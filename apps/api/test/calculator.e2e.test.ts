@@ -278,6 +278,139 @@ describe('offertecalculator', () => {
     await prisma.unscoped.supplierConnection.delete({ where: { id: verbinding.id } })
   })
 
+  describe('drukprijs volgens de leverancier', () => {
+    // De prijsstructuur van midocean, niet onze eigen staffels: vijf
+    // prijstypes waarvan er twee van het logoformaat afhangen (ADR-0016).
+    let connectionId = ''
+
+    beforeAll(async () => {
+      const verbinding = await prisma.unscoped.supplierConnection.create({
+        data: {
+          supplierId, key: `${tag}-druk`, connectorKey: 'midocean-api', transport: 'REST',
+          config: { environment: 'test' },
+        },
+      })
+      connectionId = verbinding.id
+
+      await prisma.unscoped.supplierPrintManipulation.create({
+        data: { connectionId, code: 'B', description: 'Medium', pricePerPiece: '0.1200' },
+      })
+      // Techniek P3 zoals hij op 29-10-2026 in hun prijslijst stond.
+      await prisma.unscoped.supplierPrintTechnique.create({
+        data: {
+          connectionId,
+          code: 'P3',
+          name: 'Tampondruk',
+          pricingType: 'NumberOfColours',
+          setup: '27.5000',
+          setupRepeat: '12.5000',
+          nextColourCostIndicator: true,
+          varCosts: [{
+            rangeId: null, areaFrom: 0, areaTo: 0,
+            scales: [
+              { minimumQuantity: 1, price: '0,98', nextPrice: '0,54' },
+              { minimumQuantity: 250, price: '0,26', nextPrice: '0,15' },
+              { minimumQuantity: 1000, price: '0,19', nextPrice: '0,11' },
+            ],
+          }],
+        },
+      })
+
+      await prisma.unscoped.product.update({
+        where: { id: productId },
+        data: { printManipulationCode: 'B' },
+      })
+      await prisma.unscoped.productPrintOption.updateMany({
+        where: { productId },
+        data: { supplierTechniqueCode: 'P3' },
+      })
+    })
+
+    afterAll(async () => {
+      await prisma.unscoped.productPrintOption.updateMany({
+        where: { productId }, data: { supplierTechniqueCode: null },
+      })
+      await prisma.unscoped.supplierConnection.deleteMany({ where: { id: connectionId } })
+    })
+
+    it('rekent de drukprijs zoals de leverancier dat doet', async () => {
+      const res = await reken({ printOptionIds: [printOptionId], printColors: [2] }).expect(200)
+      const positie = res.body.printPositions[0]
+
+      // Met de hand nagerekend uit hun prijslijst: staffel vanaf 250 geeft
+      // 0,26 voor de eerste kleur en 0,15 voor de tweede. Dat is
+      // 250*0,26 + 250*0,15 = 102,50 drukwerk, plus 250*0,12 = 30 handling,
+      // samen 132,50 oftewel 0,53 per stuk. Setup 27,50 maal twee kleuren.
+      expect(positie.unitPurchaseCost).toBe('0.5300')
+      expect(positie.setupPurchaseCost).toBe('55.0000')
+      expect(res.body.warnings).toHaveLength(0)
+    })
+
+    it('gebruikt de goedkopere vervolgkleurprijs, ook met indicator "true"', async () => {
+      // De handleiding noemt "X"; de echte lijst zegt "true". Met alleen de
+      // X-controle zou elke kleur de volle prijs kosten: 250*0,26*2 = 130.
+      const een = await reken({ printOptionIds: [printOptionId], printColors: [1] }).expect(200)
+      const twee = await reken({ printOptionIds: [printOptionId], printColors: [2] }).expect(200)
+
+      const eenKleur = Number(een.body.printPositions[0].unitPurchaseCost)
+      const tweeKleuren = Number(twee.body.printPositions[0].unitPurchaseCost)
+      // De tweede kleur kost 0,15 en niet nog eens 0,26.
+      expect(Number((tweeKleuren - eenKleur).toFixed(4))).toBe(0.15)
+    })
+
+    it('leest een staffeldrempel met duizendtalpunt goed', async () => {
+      // Zonder die behandeling zou "1.000" als 1 gelezen worden en gold de
+      // scherpste prijs al bij het eerste exemplaar.
+      const klein = await reken({ printOptionIds: [printOptionId], printColors: [1], quantity: 10 }).expect(200)
+      const groot = await reken({ printOptionIds: [printOptionId], printColors: [1], quantity: 1000 }).expect(200)
+
+      expect(Number(klein.body.printPositions[0].unitPurchaseCost)).toBeCloseTo(0.98 + 0.12, 4)
+      expect(Number(groot.body.printPositions[0].unitPurchaseCost)).toBeCloseTo(0.19 + 0.12, 4)
+    })
+
+    it('waarschuwt bij het prijstype dat niet gedocumenteerd is', async () => {
+      await prisma.unscoped.supplierPrintTechnique.update({
+        where: { connectionId_code: { connectionId, code: 'P3' } },
+        data: {
+          pricingType: 'Area',
+          varCosts: [{ rangeId: null, areaFrom: 0, areaTo: 0, scales: [{ minimumQuantity: 1, price: '0,011' }] }],
+        },
+      })
+      try {
+        const res = await reken({
+          printOptionIds: [printOptionId], printColors: [1], printAreaCm2: [150],
+        }).expect(200)
+
+        // 250 * 0,011 * 150 cm2 = 412,50 druk, plus 30 handling: 1,77 per stuk.
+        expect(res.body.printPositions[0].unitPurchaseCost).toBe('1.7700')
+        expect(res.body.warnings.join(' ')).toContain('per vierkante centimeter')
+        expect(res.body.warnings.join(' ')).toContain('afgeleid')
+      } finally {
+        await prisma.unscoped.supplierPrintTechnique.update({
+          where: { connectionId_code: { connectionId, code: 'P3' } },
+          data: { pricingType: 'NumberOfColours' },
+        })
+      }
+    })
+
+    it('meldt het als een prijs per oppervlak zonder formaat gevraagd wordt', async () => {
+      await prisma.unscoped.supplierPrintTechnique.update({
+        where: { connectionId_code: { connectionId, code: 'P3' } },
+        data: { pricingType: 'Area' },
+      })
+      try {
+        const res = await reken({ printOptionIds: [printOptionId], printColors: [1] }).expect(200)
+        expect(res.body.warnings.join(' ')).toContain('kon niet berekend worden')
+        expect(res.body.printPositions[0].unitPurchaseCost).toBe('0.0000')
+      } finally {
+        await prisma.unscoped.supplierPrintTechnique.update({
+          where: { connectionId_code: { connectionId, code: 'P3' } },
+          data: { pricingType: 'NumberOfColours' },
+        })
+      }
+    })
+  })
+
   it('weigert te rekenen zonder prijsregel', async () => {
     const kaal = await prisma.unscoped.product.create({
       data: {
