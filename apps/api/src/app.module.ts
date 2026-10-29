@@ -13,6 +13,7 @@ import { PaymentTermsModule } from './modules/payment-terms/payment-terms.module
 import { ProductsModule } from './modules/products/products.module'
 import { QuotesModule } from './modules/quotes/quotes.module'
 import { SettingsModule } from './modules/settings/settings.module'
+import { TemplatesModule } from './modules/templates/templates.module'
 import { UsersModule } from './modules/users/users.module'
 
 /**
@@ -21,7 +22,7 @@ import { UsersModule } from './modules/users/users.module'
  * geexporteerde service.
  */
 @Module({
-  imports: [AppConfigModule, PrismaModule, AuthModule, CoreModule, ConnectorsModule, HealthModule, MeModule, CustomersModule, UsersModule, PaymentTermsModule, ProductsModule, ImportsModule, QuotesModule, SettingsModule],
+  imports: [AppConfigModule, PrismaModule, AuthModule, CoreModule, ConnectorsModule, HealthModule, MeModule, CustomersModule, UsersModule, PaymentTermsModule, ProductsModule, ImportsModule, QuotesModule, SettingsModule, TemplatesModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -25,6 +25,7 @@ const GEBOUWD = [
     href: '/beheer/betalingsvoorwaarden', label: 'Betalingsvoorwaarden',
     icon: Receipt, permissie: 'settings:view',
   },
+  { href: '/beheer/sjablonen', label: 'Tekstsjablonen', icon: FileText, permissie: 'settings:view' },
   { href: '/beheer/instellingen', label: 'Instellingen', icon: Settings, permissie: 'settings:view' },
 ]
 

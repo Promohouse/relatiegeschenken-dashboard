@@ -1416,6 +1416,50 @@ model VatRate {
 
 /// Instellingen die zonder migratie te wijzigen moeten zijn, zoals
 /// vat.rounding en de standaard btw-code.
+/// Soort sjabloon; bepaalt welke velden erin gebruikt mogen worden.
+enum TemplateKind {
+  /// Tekst boven de offerteregels.
+  QUOTE_INTRO
+  /// Voorwaarden en afsluiting onder de offerteregels.
+  QUOTE_TERMS
+  /// Omschrijving van één offerteregel; kent de productvelden.
+  QUOTE_LINE
+  /// Onderwerp en tekst van de e-mail waarmee een offerte verstuurd wordt.
+  QUOTE_EMAIL
+}
+
+/// Een tekstsjabloon met dynamische velden.
+///
+/// Staat in de database en niet in de code: de teksten op een offerte en in
+/// een e-mail zijn van de opdrachtgever, niet van de ontwikkelaar. De velden
+/// die erin mogen staan hangen af van het soort sjabloon en worden bij het
+/// opslaan gecontroleerd, zodat er nooit een onbekend veld op een document
+/// bij een klant belandt.
+model DocumentTemplate {
+  id          String       @id @default(uuid()) @db.Uuid
+  key         String       @unique
+  kind        TemplateKind
+  name        String
+  /// Waar dit sjabloon voor dient, voor in het beheerscherm.
+  description String?
+
+  /// Alleen gevuld bij een e-mailsjabloon.
+  subject String?
+  body    String
+
+  /// Systeemsjablonen zijn wel aan te passen maar niet te verwijderen: de
+  /// code verwijst naar hun sleutel.
+  isSystem Boolean @default(false)
+  isActive Boolean @default(true)
+
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind])
+  @@map("document_templates")
+}
+
 model Setting {
   key         String   @id
   value       Json

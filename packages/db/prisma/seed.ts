@@ -164,6 +164,73 @@ async function seedBaseData() {
     })
   }
 
+  // Tekstsjablonen. De teksten hieronder zijn een beginpunt en bedoeld om
+  // aangepast te worden: ze staan in de database en zijn in het beheerscherm
+  // te wijzigen. De velden tussen dubbele accolades worden bij het opslaan
+  // gecontroleerd, zodat er nooit een onbekend veld bij een klant belandt.
+  const templates = [
+    {
+      key: 'quote.intro',
+      kind: 'QUOTE_INTRO' as const,
+      name: 'Inleiding op de offerte',
+      description: 'De tekst boven de regels van de offerte.',
+      body:
+        '{{contact.aanhef}},\n\n' +
+        'Hartelijk dank voor uw aanvraag. Hierbij ontvangt u onze offerte {{offerte.nummer}}.\n' +
+        'Uw referentie: {{offerte.referentie}}\n\n' +
+        'Deze offerte is geldig tot {{offerte.geldigTot}}. Heeft u vragen of wilt u iets ' +
+        'aangepast zien, belt u gerust even.',
+    },
+    {
+      key: 'quote.terms',
+      kind: 'QUOTE_TERMS' as const,
+      name: 'Voorwaarden onder de offerte',
+      description: 'De tekst onder de regels, met de afspraken die voor deze offerte gelden.',
+      body:
+        'Genoemde prijzen zijn per stuk en exclusief btw, tenzij anders vermeld.\n' +
+        'De prijs geldt voor het genoemde aantal; bij een ander aantal rekenen wij opnieuw.\n' +
+        'Instelkosten worden eenmalig per opdracht berekend.\n\n' +
+        'Levertijd in overleg, gerekend vanaf goedkeuring van de drukproef.\n' +
+        'Betaling: {{offerte.betalingsvoorwaarde}}.\n' +
+        'Op al onze leveringen zijn onze algemene voorwaarden van toepassing.\n\n' +
+        'Met vriendelijke groet,\n{{gebruiker.naam}}\n{{bedrijf.naam}} · {{bedrijf.telefoon}}',
+    },
+    {
+      key: 'quote.line',
+      kind: 'QUOTE_LINE' as const,
+      name: 'Omschrijving van een offerteregel',
+      description: 'Hoe een regel op de offerte wordt omschreven. Kent de productvelden.',
+      body:
+        '{{product.naam}} ({{product.artikelnummer}})\n' +
+        'Kleur: {{product.kleur}}\n' +
+        '{{bedrukking.techniek}} op {{bedrukking.positie}}, {{bedrukking.kleuren}} kleur(en)',
+    },
+    {
+      key: 'quote.email',
+      kind: 'QUOTE_EMAIL' as const,
+      name: 'E-mail waarmee de offerte verstuurd wordt',
+      description: 'Onderwerp en tekst van de begeleidende e-mail.',
+      subject: 'Offerte {{offerte.nummer}} van {{bedrijf.naam}}',
+      body:
+        '{{contact.aanhef}},\n\n' +
+        'Bijgaand onze offerte {{offerte.nummer}} voor {{klant.naam}}, met een totaal van ' +
+        '{{offerte.totaal}} exclusief btw.\n\n' +
+        'De offerte is geldig tot {{offerte.geldigTot}}. Laat u gerust weten als er iets ' +
+        'aangepast moet worden.\n\n' +
+        'Met vriendelijke groet,\n{{gebruiker.naam}}\n{{bedrijf.naam}}\n' +
+        '{{bedrijf.telefoon}} · {{bedrijf.email}}',
+    },
+  ]
+  for (const t of templates) {
+    await prisma.documentTemplate.upsert({
+      where: { key: t.key },
+      // De tekst zelf wordt niet overschreven: wie hem in het scherm heeft
+      // aangepast wil niet dat een seedronde dat terugdraait.
+      update: { kind: t.kind, description: t.description },
+      create: { ...t, isSystem: true },
+    })
+  }
+
   // Nummerreeksen. Formaat en startwaarde zijn later te wijzigen via
   // Instellingen, ook als er al nummers zijn uitgegeven.
   const sequences = [
@@ -210,7 +277,7 @@ async function seedBaseData() {
     await prisma.printMethod.upsert({ where: { key: m.key }, update: { name: m.name }, create: m })
   }
 
-  console.log(`  basisgegevens: ${vatRates.length} btw-tarieven, ${settings.length} instellingen, ${sequences.length} nummerreeksen, ${printMethods.length} bedrukkingstechnieken, ${printPositions.length} bedrukposities, ${paymentTerms.length} betalingsvoorwaarden`)
+  console.log(`  basisgegevens: ${vatRates.length} btw-tarieven, ${settings.length} instellingen, ${sequences.length} nummerreeksen, ${printMethods.length} bedrukkingstechnieken, ${printPositions.length} bedrukposities, ${paymentTerms.length} betalingsvoorwaarden, ${templates.length} tekstsjablonen`)
 }
 
 // --- Demogegevens ----------------------------------------------------------
