@@ -27,6 +27,12 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   de plek waar de verzending uit betaald wordt, ook bij een scherpe afspraak.
   Dit maakt af wat ADR-0017 al besloot maar wat alleen werkte als er een
   aparte drukmarge was ingesteld.
+- **Verzendwijzen als keuzelijst** onder *Bijdrage verzendkosten* in de
+  calculator, met Pakket en Pallet als vertrekpunt. Kiezen vult beide bedragen
+  en ze blijven aanpasbaar. De lijst staat in Instellingen, zodat een
+  tariefwijziging van de vervoerder geen nieuwe versie van de software vraagt.
+  Deze instelling wordt bij een nieuwe seed niet overschreven, anders zou een
+  reseed de ingestelde tarieven stilzwijgend terugzetten.
 - **Verzendkosten en een bijdrage** in de calculator. De kosten gaan niet naar
   de klant maar drukken wel op de marge, dus staan ze in de inkoopwaarde met
   eronder wat er per saldo wordt toegelegd. Een bijdrage van de klant komt

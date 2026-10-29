@@ -78,6 +78,56 @@ export const updateCompanySettingsSchema = z.object({
   logoDark: tekst(300),
 })
 
+/**
+ * Verzendwijzen met wat ze kosten en wat de klant eraan bijdraagt.
+ *
+ * Een instelling en geen vaste lijst in de code: welke vormen er zijn en wat
+ * ze kosten verschilt per vervoerder en per jaar, en dat hoort geen nieuwe
+ * versie van de software te vragen.
+ *
+ * Twee bedragen, want het zijn twee verschillende dingen. Wat de verzending
+ * ons kost drukt op de marge ook als er niets voor gerekend wordt; wat de
+ * klant bijdraagt is omzet. Nul als bijdrage is hier het gewone geval.
+ */
+const verzendbedrag = (veld: string) =>
+  z.string({ error: `Vul een bedrag in bij ${veld}` })
+    .trim()
+    .regex(/^\d{1,6}([.,]\d{1,2})?$/, `${veld} ziet eruit als 9,50`)
+    .transform((v) => v.replace(',', '.'))
+
+export const shippingMethodSchema = z.object({
+  name: z.string(),
+  cost: z.string(),
+  contribution: z.string(),
+})
+
+export const shippingMethodsSchema = z.array(shippingMethodSchema)
+
+export const updateShippingMethodsSchema = z
+  .array(
+    z.object({
+      name: z.string({ error: 'Vul een naam in' }).trim().min(2, 'Vul een naam in').max(60),
+      cost: verzendbedrag('de kostprijs'),
+      contribution: verzendbedrag('de bijdrage'),
+    }),
+  )
+  .max(20, 'Meer dan twintig verzendwijzen maakt de keuzelijst onbruikbaar')
+  .superRefine((lijst, ctx) => {
+    // Twee keer dezelfde naam maakt de keuzelijst onleesbaar: je ziet dan
+    // twee regels "Pakket" met verschillende bedragen erachter.
+    const gezien = new Set<string>()
+    lijst.forEach((wijze, i) => {
+      const sleutel = wijze.name.toLowerCase()
+      if (gezien.has(sleutel)) {
+        ctx.addIssue({ code: 'custom', message: 'Deze naam staat er al', path: [i, 'name'] })
+      }
+      gezien.add(sleutel)
+    })
+  })
+
+export type ShippingMethod = z.infer<typeof shippingMethodSchema>
+export type UpdateShippingMethods = z.infer<typeof updateShippingMethodsSchema>
+
 export const themePreferenceSchema = z.enum(['SYSTEM', 'LIGHT', 'DARK'])
 
 export const updateThemeSchema = z.object({ theme: themePreferenceSchema })

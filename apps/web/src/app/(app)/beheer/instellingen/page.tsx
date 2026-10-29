@@ -1,15 +1,19 @@
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
-import type { CompanySettings } from '@rgh/contracts'
+import { formatEuro, type CompanySettings, type ShippingMethod } from '@rgh/contracts'
 import { apiGet } from '@/lib/api'
 import { BedrijfsgegevensFormulier } from '@/components/bedrijfsgegevens-formulier'
+import { VerzendwijzenFormulier } from '@/components/verzendwijzen-formulier'
 import { getCurrentUser, mag } from '@/lib/session'
 
 export default async function InstellingenPagina() {
   const user = await getCurrentUser()
   if (!mag(user, 'settings:view')) redirect('/')
 
-  const bedrijf = await apiGet<CompanySettings>('/api/settings/company')
+  const [bedrijf, verzendwijzen] = await Promise.all([
+    apiGet<CompanySettings>('/api/settings/company'),
+    apiGet<ShippingMethod[]>('/api/settings/shipping-methods'),
+  ])
   const magWijzigen = mag(user, 'settings:update')
 
   return (
@@ -58,6 +62,38 @@ export default async function InstellingenPagina() {
           Je mag deze gegevens bekijken maar niet wijzigen. Daarvoor is het recht
           settings:update nodig.
         </p>
+      )}
+
+      <h2 className="mt-10 text-xl font-bold tracking-tight">Verzendwijzen</h2>
+      <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+        De keuzelijst bij <strong>Bijdrage verzendkosten</strong> in de calculator. Wat een
+        verzending ons kost drukt op de marge ook als er niets voor gerekend wordt; wat de klant
+        bijdraagt komt als bedrag op de offerte. Beide staan hier, zodat een tariefwijziging van
+        de vervoerder geen nieuwe versie van de software vraagt.
+      </p>
+
+      {magWijzigen ? (
+        <div className="mt-5">
+          <VerzendwijzenFormulier wijzen={verzendwijzen} />
+        </div>
+      ) : (
+        <div className="mt-5 overflow-hidden rounded border border-rule bg-surface">
+          {verzendwijzen.length === 0 ? (
+            <p className="p-4 text-sm text-ink-faint">Nog geen verzendwijzen ingesteld.</p>
+          ) : (
+            verzendwijzen.map((w) => (
+              <div
+                key={w.name}
+                className="flex items-baseline justify-between gap-4 border-b border-rule p-4 text-sm last:border-0"
+              >
+                <span className="font-medium">{w.name}</span>
+                <span className="tabular text-ink-soft">
+                  kost {formatEuro(w.cost)} · klant betaalt {formatEuro(w.contribution)}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
       )}
     </div>
   )

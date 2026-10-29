@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   formatEuro,
   type ProductDetail, type ProductPickerItem, type QuoteLineCalculation, type QuoteTiers,
+  type ShippingMethod,
 } from '@rgh/contracts'
 import { ProductKiezer } from './product-kiezer'
 import { Button } from '@/components/ui/button'
@@ -36,12 +37,15 @@ export function Calculator({
   beginProduct,
   klanten,
   staffelaantallen,
+  verzendwijzen,
 }: {
   /** Product uit de URL, bijvoorbeeld via "Doorrekenen" op de productpagina. */
   beginProduct: ProductDetail | null
   klanten: { id: string; name: string }[]
   /** Standaardaantallen voor de staffel, uit de instellingen. */
   staffelaantallen: number[]
+  /** Verzendwijzen met hun bedragen, uit de instellingen. */
+  verzendwijzen: ShippingMethod[]
 }) {
   const [product, setProduct] = useState<ProductDetail | null>(beginProduct)
   const [laadFout, setLaadFout] = useState<string | null>(null)
@@ -53,8 +57,23 @@ export function Calculator({
   const [manueel, setManueel] = useState('')
   const [korting, setKorting] = useState('0')
   const [drukMarge, setDrukMarge] = useState('')
+  const [verzendwijze, setVerzendwijze] = useState('')
   const [verzendkosten, setVerzendkosten] = useState('')
   const [verzendbijdrage, setVerzendbijdrage] = useState('')
+
+  /**
+   * Een verzendwijze kiezen vult de twee bedragen. Ze blijven invulbaar: het
+   * tarief uit de instellingen is het gewone geval, niet de enige mogelijkheid.
+   */
+  function kiesVerzendwijze(naam: string) {
+    setVerzendwijze(naam)
+    const gekozen = verzendwijzen.find((w) => w.name === naam)
+    // Met een komma in beeld, zoals een bedrag hier geschreven wordt. Bij het
+    // versturen gaat er weer een punt van.
+    const metKomma = (bedrag: string) => bedrag.replace('.', ',')
+    setVerzendkosten(gekozen ? metKomma(gekozen.cost) : '')
+    setVerzendbijdrage(gekozen ? metKomma(gekozen.contribution) : '')
+  }
   const [regime, setRegime] = useState('DOMESTIC')
 
   const [uitkomst, setUitkomst] = useState<QuoteLineCalculation | null>(null)
@@ -340,36 +359,6 @@ export function Calculator({
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="verzendkosten" className="text-sm font-medium text-ink-soft">
-              Verzendkosten
-            </label>
-            <Input
-              id="verzendkosten"
-              value={verzendkosten}
-              placeholder="wat het ons kost"
-              aria-describedby="verzendkosten-hint"
-              onChange={(e) => setVerzendkosten(e.target.value)}
-            />
-            <p id="verzendkosten-hint" className="text-xs text-ink-faint">
-              Wordt niet aan de klant gerekend, dus komt dit van de marge af.
-            </p>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="verzendbijdrage" className="text-sm font-medium text-ink-soft">
-              Bijdrage verzendkosten
-            </label>
-            <Input
-              id="verzendbijdrage"
-              value={verzendbijdrage}
-              placeholder="leeg = geen bijdrage"
-              aria-describedby="verzendbijdrage-hint"
-              onChange={(e) => setVerzendbijdrage(e.target.value)}
-            />
-            <p id="verzendbijdrage-hint" className="text-xs text-ink-faint">
-              Wat de klant eraan meebetaalt. Komt eenmalig op de offerte.
-            </p>
-          </div>
-          <div className="flex flex-col gap-1.5">
             <label htmlFor="regime" className="text-sm font-medium text-ink-soft">
               Btw
             </label>
@@ -386,6 +375,63 @@ export function Calculator({
             </select>
           </div>
         </div>
+
+        <fieldset className="mt-5 rounded border border-rule p-4">
+          <legend className="px-1.5 text-sm font-medium text-ink-soft">
+            Bijdrage verzendkosten
+          </legend>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1.8fr)_1fr_1fr]">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="verzendwijze" className="text-xs font-medium text-ink-soft">
+                Verzendwijze
+              </label>
+              <select
+                id="verzendwijze"
+                value={verzendwijze}
+                onChange={(e) => kiesVerzendwijze(e.target.value)}
+                className="h-9 rounded border border-rule bg-surface px-2.5 text-sm text-ink focus:border-accent focus:outline-none"
+              >
+                <option value="">Geen verzending</option>
+                {verzendwijzen.map((w) => (
+                  <option key={w.name} value={w.name}>
+                    {w.name} — kost {formatEuro(w.cost)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="verzendkosten" className="text-xs font-medium text-ink-soft">
+                Kost ons
+              </label>
+              <Input
+                id="verzendkosten"
+                value={verzendkosten}
+                placeholder="0,00"
+                className="tabular"
+                onChange={(e) => setVerzendkosten(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="verzendbijdrage" className="text-xs font-medium text-ink-soft">
+                Klant betaalt
+              </label>
+              <Input
+                id="verzendbijdrage"
+                value={verzendbijdrage}
+                placeholder="0,00"
+                className="tabular"
+                onChange={(e) => setVerzendbijdrage(e.target.value)}
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-ink-faint">
+            De tarieven komen uit{' '}
+            <Link href="/beheer/instellingen" className="hover:text-accent">
+              Instellingen
+            </Link>{' '}
+            en zijn hier aan te passen. Wat wij betalen en niet doorrekenen komt van de marge af.
+          </p>
+        </fieldset>
 
         <div className="mt-5 flex flex-wrap items-end gap-3">
           <Button type="button" disabled={bezig} onClick={() => void reken()}>

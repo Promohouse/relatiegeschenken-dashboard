@@ -198,7 +198,12 @@ test.describe('calculator', () => {
     const zonder = page.locator('div', { hasText: /^Marge/ }).last()
     const margeZonder = await zonder.innerText()
 
-    await page.getByLabel('Verzendkosten', { exact: true }).fill('45')
+    // Een verzendwijze kiezen vult de bedragen uit de instellingen.
+    await page.getByLabel('Verzendwijze').selectOption('Pallet')
+    await expect(page.getByLabel('Kost ons')).toHaveValue('85,00')
+    await expect(page.getByLabel('Klant betaalt')).toHaveValue('0,00')
+
+    await page.getByLabel('Kost ons').fill('45')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
 
     await expect(page.getByText('Waarvan verzending')).toBeVisible()
@@ -206,7 +211,7 @@ test.describe('calculator', () => {
     // De marge is gezakt: de verzending zit in de inkoop, niet in de omzet.
     await expect(page.locator('div', { hasText: /^Marge/ }).last()).not.toHaveText(margeZonder)
 
-    await page.getByLabel('Bijdrage verzendkosten').fill('25')
+    await page.getByLabel('Klant betaalt').fill('25')
     await page.getByRole('button', { name: 'Doorrekenen' }).click()
     await expect(page.getByText('klant draagt € 25,00 bij — wij leggen € 20,00 toe')).toBeVisible()
   })

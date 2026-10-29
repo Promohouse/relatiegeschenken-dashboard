@@ -117,6 +117,21 @@ async function seedBaseData() {
       description: 'Aantallen waarvoor de calculator standaard een staffel toont.',
     },
     {
+      key: 'shipping.methods',
+      value: [
+        { name: 'Pakket', cost: '9.50', contribution: '0.00' },
+        { name: 'Pallet', cost: '85.00', contribution: '0.00' },
+      ],
+      description:
+        'Verzendwijzen voor de calculator: wat de verzending ons kost en wat de klant eraan ' +
+        'bijdraagt. De bijdrage staat standaard op nul, want hier wordt verzending meestal ' +
+        'niet doorberekend.',
+      // Alleen bij aanmaken: deze lijst wordt in het scherm onderhouden en
+      // tarieven veranderen. Een seed die hem terugzet zou die wijzigingen
+      // stilzwijgend ongedaan maken.
+      onlyOnCreate: true,
+    },
+    {
       key: 'quote.validityDays',
       value: 30,
       description: 'Hoeveel dagen een offerte geldig is.',
@@ -140,7 +155,9 @@ async function seedBaseData() {
   for (const s of settings) {
     await prisma.setting.upsert({
       where: { key: s.key },
-      update: { value: s.value as never, description: s.description },
+      update: 'onlyOnCreate' in s && s.onlyOnCreate
+        ? { description: s.description }
+        : { value: s.value as never, description: s.description },
       create: { key: s.key, value: s.value as never, description: s.description },
     })
   }

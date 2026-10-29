@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import type { PaginatedCustomers, ProductDetail } from '@rgh/contracts'
+import type { PaginatedCustomers, ProductDetail, ShippingMethod } from '@rgh/contracts'
 import { ApiError, apiGet } from '@/lib/api'
 import { Calculator } from '@/components/calculator'
 import { getCurrentUser, mag } from '@/lib/session'
@@ -16,11 +16,12 @@ export default async function CalculatorPagina({
 
   // Klanten voor de keuzelijst; zonder het recht erop blijft die leeg en
   // rekent de calculator met de algemene prijs.
-  const [klanten, staffelaantallen] = await Promise.all([
+  const [klanten, staffelaantallen, verzendwijzen] = await Promise.all([
     mag(user, 'customers:view')
       ? apiGet<PaginatedCustomers>('/api/customers?status=active&pageSize=100&sort=name')
       : Promise.resolve({ items: [] } as unknown as PaginatedCustomers),
     apiGet<number[]>('/api/settings/quote-tiers'),
+    apiGet<ShippingMethod[]>('/api/settings/shipping-methods'),
   ])
 
   // Een product uit de URL, bijvoorbeeld via "Doorrekenen" op de
@@ -47,6 +48,7 @@ export default async function CalculatorPagina({
           beginProduct={beginProduct}
           klanten={klanten.items.map((k) => ({ id: k.id, name: k.name }))}
           staffelaantallen={staffelaantallen}
+          verzendwijzen={verzendwijzen}
         />
       </div>
     </div>

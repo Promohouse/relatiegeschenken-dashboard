@@ -62,6 +62,10 @@ describe('bedrijfsgegevens en weergave', () => {
     await prisma.unscoped.user.deleteMany({ where: { id: ikId } })
     await prisma.unscoped.role.deleteMany({ where: { key: { startsWith: tag } } })
     await prisma.unscoped.setting.deleteMany({ where: { key: { startsWith: 'company.' } } })
+    await prisma.unscoped.auditLog.deleteMany({
+      where: { entity: 'Setting', entityId: 'shipping.methods' },
+    })
+    await prisma.unscoped.setting.deleteMany({ where: { key: 'shipping.methods' } })
     await app?.close()
   })
 
@@ -137,6 +141,64 @@ describe('bedrijfsgegevens en weergave', () => {
       .patch('/api/settings/company').set('Cookie', cookie)
       .send({ ...volledig, name: '' }).expect(400)
     expect(res.body.error.details[0].melding).toBe('Vul een bedrijfsnaam in')
+  })
+
+  describe('verzendwijzen', () => {
+    const pad = '/api/settings/shipping-methods'
+
+    it('slaat de lijst op met beide bedragen', async () => {
+      const res = await api().patch(pad).set('Cookie', cookie).send([
+        { name: 'Pakket', cost: '9,50', contribution: '0' },
+        { name: 'Pallet', cost: '85', contribution: '50' },
+      ]).expect(200)
+
+      expect(res.body).toHaveLength(2)
+      // Een komma mag in de invoer; wat eruit komt is altijd een punt.
+      expect(res.body[0]).toEqual({ name: 'Pakket', cost: '9.50', contribution: '0' })
+      expect(res.body[1].contribution).toBe('50')
+    })
+
+    it('weigert twee keer dezelfde naam, want dan is de keuzelijst onleesbaar', async () => {
+      const res = await api().patch(pad).set('Cookie', cookie).send([
+        { name: 'Pakket', cost: '9.50', contribution: '0' },
+        { name: 'pakket', cost: '12.00', contribution: '0' },
+      ]).expect(400)
+      expect(JSON.stringify(res.body)).toContain('staat er al')
+    })
+
+    it('weigert een bedrag dat geen bedrag is', async () => {
+      await api().patch(pad).set('Cookie', cookie)
+        .send([{ name: 'Pakket', cost: 'duur', contribution: '0' }]).expect(400)
+    })
+
+    it('laat iedereen die is ingelogd de lijst lezen, want de calculator heeft hem nodig', async () => {
+      const email = `${tag}-verzend@test.local`
+      const kijker = await maakGebruikerMetWachtwoord(app, { email, name: 'Kijker', password: wachtwoord })
+      const login = await api().post('/api/auth/sign-in/email')
+        .send({ email, password: wachtwoord }).expect(200)
+      const kijkCookie = ((login.headers['set-cookie'] as unknown as string[]) ?? [])
+        .map((c) => c.split(';')[0]).join('; ')
+
+      await api().get(pad).set('Cookie', kijkCookie).expect(200)
+      // Maar wijzigen niet.
+      await api().patch(pad).set('Cookie', kijkCookie).send([]).expect(403)
+
+      await prisma.unscoped.session.deleteMany({ where: { userId: kijker.id } })
+      await prisma.unscoped.account.deleteMany({ where: { userId: kijker.id } })
+      await prisma.unscoped.user.deleteMany({ where: { id: kijker.id } })
+    })
+
+    it('legt de wijziging vast in het auditlog', async () => {
+      await api().patch(pad).set('Cookie', cookie)
+        .send([{ name: 'Koerier', cost: '25.00', contribution: '25.00' }]).expect(200)
+
+      const regel = await prisma.unscoped.auditLog.findFirst({
+        where: { entity: 'Setting', entityId: 'shipping.methods' },
+        orderBy: { occurredAt: 'desc' },
+      })
+      expect(regel).not.toBeNull()
+      expect(JSON.stringify(regel?.diff)).toContain('Koerier')
+    })
   })
 
   it('legt elke wijziging in het auditlog vast, met oud en nieuw', async () => {

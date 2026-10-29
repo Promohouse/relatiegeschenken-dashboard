@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
-import type { CompanySettings, UpdateCompanySettings } from '@rgh/contracts'
+import type {
+  CompanySettings, ShippingMethod, UpdateCompanySettings, UpdateShippingMethods,
+} from '@rgh/contracts'
 import { PrismaService } from '../../core/prisma/prisma.service'
 import { AuditService } from '../../core/audit/audit.service'
 
@@ -51,6 +53,55 @@ export class SettingsService {
       .filter((v) => Number.isInteger(v) && v > 0)
       .sort((a, b) => a - b)
     return aantallen.length > 0 ? aantallen : [50, 100, 250, 500, 1000]
+  }
+
+  /**
+   * Verzendwijzen voor de calculator, met wat ze kosten en wat de klant
+   * bijdraagt.
+   *
+   * Zonder instelling een lege lijst en geen verzonnen bedragen: een
+   * standaard van negen euro vijftig die niet klopt is erger dan geen
+   * keuzelijst, want hij wordt wel gebruikt.
+   */
+  async shippingMethods(): Promise<ShippingMethod[]> {
+    const rij = await this.prisma.db.setting.findUnique({ where: { key: 'shipping.methods' } })
+    if (!Array.isArray(rij?.value)) return []
+
+    return rij.value.flatMap((waarde) => {
+      if (typeof waarde !== 'object' || waarde === null) return []
+      const w = waarde as Record<string, unknown>
+      if (typeof w.name !== 'string' || w.name.trim() === '') return []
+      return [{
+        name: w.name,
+        cost: String(w.cost ?? '0'),
+        contribution: String(w.contribution ?? '0'),
+      }]
+    })
+  }
+
+  async updateShippingMethods(input: UpdateShippingMethods): Promise<ShippingMethod[]> {
+    const voor = await this.shippingMethods()
+
+    await this.prisma.db.setting.upsert({
+      where: { key: 'shipping.methods' },
+      update: { value: input },
+      create: {
+        key: 'shipping.methods',
+        value: input,
+        description:
+          'Verzendwijzen voor de calculator: wat de verzending ons kost en wat de klant eraan ' +
+          'bijdraagt.',
+      },
+    })
+
+    const na = await this.shippingMethods()
+    await this.audit.record({
+      entity: 'Setting',
+      entityId: 'shipping.methods',
+      action: 'UPDATE',
+      diff: { shippingMethods: { van: voor, naar: na } },
+    })
+    return na
   }
 
   async company(): Promise<CompanySettings> {

@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Patch } from '@nestjs/common'
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import {
-  companySettingsSchema, updateCompanySettingsSchema, type UpdateCompanySettings,
+  companySettingsSchema, shippingMethodSchema, updateCompanySettingsSchema,
+  updateShippingMethodsSchema,
+  type UpdateCompanySettings, type UpdateShippingMethods,
 } from '@rgh/contracts'
 import { RequireLogin, RequirePermission } from '../../core/auth/auth.decorators'
 import { ZodValidationPipe } from '../../core/validation/zod-validation.pipe'
@@ -9,6 +11,7 @@ import { registerSchema, schemaRef } from '../../core/openapi/schema-registry'
 import { SettingsService } from './settings.service'
 
 registerSchema('CompanySettings', companySettingsSchema)
+registerSchema('ShippingMethod', shippingMethodSchema)
 
 @ApiTags('instellingen')
 @Controller('settings')
@@ -23,6 +26,32 @@ export class SettingsController {
   })
   quoteTiers() {
     return this.settings.tierQuantities()
+  }
+
+  @Get('shipping-methods')
+  @RequireLogin()
+  @ApiOperation({
+    summary: 'Verzendwijzen met kosten en bijdrage',
+    description:
+      'Iedereen die is ingelogd mag deze lezen: de calculator heeft ze nodig. Wijzigen vraagt ' +
+      'settings:update.',
+  })
+  @ApiOkResponse({ schema: { type: 'array', items: schemaRef('ShippingMethod') } })
+  shippingMethods() {
+    return this.settings.shippingMethods()
+  }
+
+  @Patch('shipping-methods')
+  @RequirePermission('settings:update')
+  @ApiOperation({
+    summary: 'Verzendwijzen wijzigen',
+    description: 'Vervangt de hele lijst. Komt in het auditlog.',
+  })
+  @ApiOkResponse({ schema: { type: 'array', items: schemaRef('ShippingMethod') } })
+  updateShippingMethods(
+    @Body(new ZodValidationPipe(updateShippingMethodsSchema)) body: UpdateShippingMethods,
+  ) {
+    return this.settings.updateShippingMethods(body)
   }
 
   @Get('company')

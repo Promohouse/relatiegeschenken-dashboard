@@ -103,4 +103,33 @@ test.describe('weergave', () => {
     await page.getByRole('button', { name: 'Wijzigingen opslaan' }).click()
     await expect(page.getByRole('heading', { name: 'Bedrijfsgegevens' })).toBeVisible()
   })
+
+  test('onderhoudt de verzendwijzen voor de calculator', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/beheer/instellingen')
+
+    await expect(page.getByRole('heading', { name: 'Verzendwijzen' })).toBeVisible()
+    await expect(page.getByLabel('Naam verzendwijze 1')).toHaveValue('Pakket')
+    await expect(page.getByLabel('Kostprijs verzendwijze 1')).toHaveValue('9,50')
+
+    // Een tarief wijzigen hoort geen nieuwe versie van de software te vragen.
+    await page.getByLabel('Kostprijs verzendwijze 1').fill('11,25')
+    await page.getByRole('button', { name: 'Verzendwijzen opslaan' }).click()
+    await expect(page.getByText('Opgeslagen.')).toBeVisible()
+
+    await page.reload()
+    await expect(page.getByLabel('Kostprijs verzendwijze 1')).toHaveValue('11,25')
+
+    // En in de calculator staat het nieuwe bedrag in de keuzelijst.
+    await page.goto('/calculator')
+    await page.getByLabel('Product').fill('DEMO-1001')
+    await page.getByRole('button', { name: 'Zoeken' }).click()
+    await expect(page.getByLabel('Verzendwijze')).toContainText('Pakket — kost € 11,25')
+
+    // Terugzetten, anders werkt de calculatortest met een ander bedrag.
+    await page.goto('/beheer/instellingen')
+    await page.getByLabel('Kostprijs verzendwijze 1').fill('9,50')
+    await page.getByRole('button', { name: 'Verzendwijzen opslaan' }).click()
+    await expect(page.getByText('Opgeslagen.')).toBeVisible()
+  })
 })
