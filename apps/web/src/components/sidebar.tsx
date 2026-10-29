@@ -20,6 +20,7 @@ const GEBOUWD = [
   { href: '/beheer/rollen', label: 'Rollen', icon: ShieldCheck, permissie: 'users:view' },
   { href: '/producten', label: 'Producten', icon: Package, permissie: 'products:view' },
   { href: '/calculator', label: 'Calculator', icon: Calculator, permissie: 'quotes:view' },
+  { href: '/offertes', label: 'Offertes', icon: FileText, permissie: 'quotes:view' },
   { href: '/imports', label: 'Imports', icon: Download, permissie: 'imports:view' },
   { href: '/beheer/marges', label: 'Marges', icon: Percent, permissie: 'settings:view' },
   {
@@ -31,7 +32,6 @@ const GEBOUWD = [
 ]
 
 const NOG_NIET = [
-  { label: 'Offertes', icon: FileText },
   { label: 'Orders', icon: ClipboardList },
   { label: 'Leveranciers', icon: Truck },
   { label: 'Taken', icon: CheckSquare },

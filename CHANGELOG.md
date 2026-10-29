@@ -18,6 +18,14 @@ Formaat: [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/).
   ingevuld worden om scherper te offreren, en de uitkomst zegt met welk
   oppervlak gerekend is. Geeft de leverancier geen maximum, dan waarschuwt de
   calculatie zoals voorheen in plaats van met nul te rekenen.
+- **Offertescherm** (`/offertes`). Een overzicht met nummer, klant, aantal
+  regels, totaal en status; een offerte aanmaken bij een klant; en een
+  detailscherm waar je regels toevoegt met dezelfde invoer als de calculator.
+  De regel verschijnt meteen in de tabel met zijn bedragen - er is geen
+  tussenstap, want dat zou een tweede plek zijn waar een prijs kan staan.
+- Een vastgezette versie toont dat ook, en het toevoegen en verwijderen van
+  regels verdwijnt dan uit het scherm. De database weigert het sowieso; dit is
+  de beleefde kant ervan.
 - **De offerte als document** (`/api/quotes`). Een offerte aanmaken bij een
   klant, regels toevoegen en weghalen, met een nummer uit de reeks
   (`OFF-2026-00001`) en een eerste versie. Een regel is een bewaarde

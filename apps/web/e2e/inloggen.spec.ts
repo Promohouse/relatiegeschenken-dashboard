@@ -64,9 +64,12 @@ test.describe('ingelogd', () => {
   test('toont welke modules gebouwd zijn en welke nog niet', async ({ page }) => {
     const zijbalk = page.getByRole('complementary')
     await expect(zijbalk.getByRole('link', { name: 'Klanten' })).toBeVisible()
+    await expect(zijbalk.getByRole('link', { name: 'Offertes' })).toBeVisible()
     await expect(zijbalk.getByText('Nog in aanbouw')).toBeVisible()
     // Wat nog niet bestaat is geen link, dus er valt niet op te klikken.
-    await expect(zijbalk.getByRole('link', { name: 'Offertes' })).toHaveCount(0)
+    // Offertes stond hier tot de offertemodule er was; orders nog wel.
+    await expect(zijbalk.getByRole('link', { name: 'Orders' })).toHaveCount(0)
+    await expect(zijbalk.getByText('Orders')).toBeVisible()
   })
 
   test('waarschuwt dat er demogegevens in deze omgeving staan', async ({ page }) => {
